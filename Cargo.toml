@@ -1,0 +1,17 @@
+[package]
+authors = ["Dave Farnham <dave.farnham@icloud.com>"]
+description = "A Rust port of LAS2 from SVDLIBC"
+keywords = ["svd"]
+categories = ["data-structures", "mathematics"]
+name = "svdlibrs"
+license-file = "SVDLIBC-LICENSE.txt"
+version = "0.1.0"
+repository = "https://github.com/dfarnham/svdlibrs"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+nalgebra-sparse = "0.5.0"
+ndarray = "0.15.3"
+rand = "0.8.4"
+thiserror = "1.0.29"
