@@ -2,7 +2,7 @@
 //!
 //! A Rust port of LAS2 from SVDLIBC.
 //!
-//! It performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [CscMatrix](https://docs.rs/nalgebra-sparse/0.5.0/nalgebra_sparse/csc/struct.CscMatrix.html) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm), and returns the decomposition as [ndarray](https://docs.rs/ndarray/0.15.3/ndarray/) components.
+//! It performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [CscMatrix](https://docs.rs/nalgebra-sparse/0.5.0/nalgebra_sparse/csc/struct.CscMatrix.html) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm) and returns the decomposition as [ndarray](https://docs.rs/ndarray/0.15.3/ndarray/) components.
 //!
 //! # SVD Examples
 //!
