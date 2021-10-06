@@ -61,7 +61,6 @@ let svd: SvdRec = svdLAS2(
     &[-1.0e-30, 1.0e-30], // left,right end of interval containing unwanted eigenvalues
     1e-6,                 // relative accuracy of ritz values acceptable as eigenvalues
     3141,                 // a supplied random seed if > 0
-    false,                // verbose output
 )
 .unwrap();
 println!("svd.d = {}\n", svd.d);
