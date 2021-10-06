@@ -11,7 +11,7 @@
 //! ```text
 //! $ Rscript -e 'options(digits=12);m<-matrix(1:9,nrow=3)^2;print(m);r<-svd(m);print(r);r$u%*%diag(r$d)%*%t(r$v)'
 //!
-//! • This the input matrix: M
+//! • The input matrix: M
 //!      [,1] [,2] [,3]
 //! [1,]    1   16   49
 //! [2,]    4   25   64
