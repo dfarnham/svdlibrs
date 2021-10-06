@@ -61,7 +61,6 @@
 //!     &[-1.0e-30, 1.0e-30], // left,right end of interval containing unwanted eigenvalues
 //!     1e-6,                 // relative accuracy of ritz values acceptable as eigenvalues
 //!     3141,                 // a supplied random seed if > 0
-//!     false,                // verbose output
 //! )
 //! .unwrap();
 //! println!("svd.d = {}\n", svd.d);
@@ -263,10 +262,11 @@ use error::SvdLibError;
 //        Public
 // ====================
 
-/// Singular Value Decomposition components
+/// Singular Value Decomposition Components
 ///
 /// # Fields
-/// - d:  dimensionality (rank)
+/// - d:  dimensionality (rank), number of Ut,Vt rows & length of S,
+///       vectors need to be truncated to this dimensionality
 /// - ut: transpose of left singular vectors, the vectors are the rows of `ut`
 /// - s:  singular values (length `d`)
 /// - vt: transpose of right singular vectors, the vectors are the rows of `vt`
@@ -275,8 +275,30 @@ pub struct SvdRec {
     pub ut: Array2<f64>,
     pub s: Array1<f64>,
     pub vt: Array2<f64>,
+    pub diagnostics: Diagnostics,
 }
 
+/// Computational Diagnostics
+///
+/// # Fields
+/// - non_zero:  the number of non-zeros in the matrix
+/// - dimensions: actual dimensions attempted (bounded by matrix shape)
+/// - transposed:  true if the matrix was transposed internally
+/// - lanczos_steps: the number of Lanczos steps performed
+/// - ritz_values_stabilized: the number of ritz values
+/// - significant_values: the number of significant values discovered
+/// - singular_values: the number of singular values returned
+pub struct Diagnostics {
+    pub non_zero: usize,
+    pub dimensions: usize,
+    pub transposed: bool,
+    pub lanczos_steps: usize,
+    pub ritz_values_stabilized: usize,
+    pub significant_values: usize,
+    pub singular_values: usize,
+}
+
+#[allow(clippy::redundant_field_names)]
 #[allow(non_snake_case)]
 #[track_caller]
 /// Compute a singular value decomposition
@@ -287,7 +309,6 @@ pub struct SvdRec {
 /// - end: left,right end of interval containing unwanted eigenvalues
 /// - kappa: relative accuracy of ritz values acceptable as eigenvalues
 /// - random_seed: a supplied seed if > 0, otherwise an internal seed will be generated
-/// - verbose: output diagnostics to stderr
 /// # Returns
 /// SvdRec struct containing the decomposition
 pub fn svdLAS2(
@@ -296,7 +317,6 @@ pub fn svdLAS2(
     end: &[f64; 2],
     kappa: f64,
     random_seed: u32,
-    verbose: bool,
 ) -> Result<SvdRec, SvdLibError> {
     let iterations = csc.nrows().min(csc.ncols());
     let dimensions = match dim.min(iterations) {
@@ -341,23 +361,11 @@ pub fn svdLAS2(
     // Compute the singular vectors of matrix A
     let kappa = kappa.abs().max(eps34());
     let mut R = ritvec(A, dimensions, kappa, &mut wrk, steps, neig, &mut store)?;
-    if verbose {
-        let format_len = 50;
-        eprintln!("{}", format!("{:~^1$}", "svdLas2", format_len));
-        eprintln!("NON ZERO                = {}", A.nnz());
-        eprintln!("DIMENSIONS              = {}", dimensions);
-        eprintln!("TRANSPOSED              = {}", transpose);
-        eprintln!("NUMBER OF LANCZOS STEPS = {}", steps + 1);
-        eprintln!("RITZ VALUES STABILIZED  = {}", neig);
-        eprintln!("SINGULAR VALUES FOUND   = {}", R.d);
-        eprintln!("SIGNIFICANT VALUES      = {}", R.nsig);
-    }
 
     // This swaps and transposes the singular matrices if A was transposed.
     if transpose {
         mem::swap(&mut R.Ut, &mut R.Vt);
     }
-    //println!("R.S.len() = {}, R.nsig = {}, R.d = {}, R.Ut.rows = {}, R.Vt.rows = {}", R.S.len(), R.nsig, R.d, R.Ut.rows, R.Vt.rows);
 
     Ok(SvdRec {
         // Dimensionality (number of Ut,Vt rows & length of S)
@@ -366,6 +374,15 @@ pub fn svdLAS2(
         ut: Array::from_shape_vec((R.Ut.rows, R.Ut.cols), R.Ut.value)?,
         s: Array::from_shape_vec(R.S.len(), R.S)?,
         vt: Array::from_shape_vec((R.Vt.rows, R.Vt.cols), R.Vt.value)?,
+        diagnostics: Diagnostics {
+            non_zero: A.nnz(),
+            dimensions: dimensions,
+            transposed: transpose,
+            lanczos_steps: steps + 1,
+            ritz_values_stabilized: neig,
+            significant_values: R.d,
+            singular_values: R.nsig,
+        },
     })
 }
 
@@ -497,7 +514,7 @@ struct DMat {
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
-struct SVDRec {
+struct SVDRawRec {
     //int d;      /* Dimensionality (rank) */
     //DMat Ut;    /* Transpose of left singular vectors. (d by m)
     //               The vectors are the rows of Ut. */
@@ -1578,7 +1595,7 @@ fn ritvec(
     steps: usize,
     neig: usize,
     store: &mut Store,
-) -> Result<SVDRec, SvdLibError> {
+) -> Result<SVDRawRec, SvdLibError> {
     let js = steps + 1;
     let jsq = js * js;
     let mut s = vec![0.0; jsq as usize];
@@ -1664,7 +1681,7 @@ fn ritvec(
         svd_dscal(sval.recip(), ut_vec);
     }
 
-    Ok(SVDRec {
+    Ok(SVDRawRec {
         // Dimensionality (rank)
         d,
 
@@ -1865,7 +1882,6 @@ mod tests {
             &[-1.0e-30, 1.0e-30], // left,right end of interval containing unwanted eigenvalues
             1e-6,                 // relative accuracy of ritz values acceptable as eigenvalues
             0,                    // a supplied random seed if > 0
-            false,                // verbose output
         )
         .unwrap();
         println!("svd.d = {}", svd.d);
