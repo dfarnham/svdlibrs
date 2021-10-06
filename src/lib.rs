@@ -270,6 +270,7 @@ use error::SvdLibError;
 /// - ut: transpose of left singular vectors, the vectors are the rows of `ut`
 /// - s:  singular values (length `d`)
 /// - vt: transpose of right singular vectors, the vectors are the rows of `vt`
+/// - diagnostics: computational diagnostics
 pub struct SvdRec {
     pub d: usize,
     pub ut: Array2<f64>,
