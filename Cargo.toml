@@ -2,10 +2,10 @@
 authors = ["Dave Farnham <dave.farnham@icloud.com>"]
 description = "A Rust port of LAS2 from SVDLIBC"
 keywords = ["svd"]
-categories = ["data-structures", "mathematics"]
+categories = ["algorithms", "data-structures", "mathematics", "science"]
 name = "svdlibrs"
 license-file = "SVDLIBC-LICENSE.txt"
-version = "0.1.0"
+version = "0.2.0"
 repository = "https://github.com/dfarnham/svdlibrs"
 readme = "README.md"
 edition = "2018"
