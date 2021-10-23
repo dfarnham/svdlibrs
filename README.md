@@ -1,4 +1,7 @@
-# svdlibrs
+# svdlibrs &emsp; [![Latest Version]][crates.io]
+
+[Latest Version]: https://img.shields.io/badge/crates.io-v0.2.0-blue
+[crates.io]: https://crates.io/crates/svdlibrs
 
 A Rust port of LAS2 from SVDLIBC
 
