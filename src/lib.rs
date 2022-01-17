@@ -539,18 +539,15 @@ fn compare(computed: f64, expected: f64) -> bool {
 
 #[track_caller]
 /* Function sorts array1 and array2 into increasing order for array1 */
-fn insert_sort(n: usize, array1: &mut [f64], array2: &mut [f64]) {
+fn insert_sort<T: PartialOrd>(n: usize, array1: &mut [T], array2: &mut [T]) {
     for i in 1..n {
-        let t1 = array1[i];
-        let t2 = array2[i];
-        let mut j: i32 = i as i32 - 1;
-        while j >= 0 && t1 < array1[j as usize] {
-            array1[(j + 1) as usize] = array1[j as usize];
-            array2[(j + 1) as usize] = array2[j as usize];
-            j -= 1;
+        for j in (1..i + 1).rev() {
+            if array1[j - 1] <= array1[j] {
+                break;
+            }
+            array1.swap(j - 1, j);
+            array2.swap(j - 1, j);
         }
-        array1[(j + 1) as usize] = t1;
-        array2[(j + 1) as usize] = t2;
     }
 }
 
@@ -624,14 +621,14 @@ fn svd_daxpy(da: f64, x: &[f64], y: &mut [f64]) {
 #[track_caller]
 // finds the index of element having max absolute value
 fn svd_idamax(n: usize, x: &[f64]) -> usize {
+    assert!(n > 0, "svd_idamax: unexpected inputs!");
+
     match n {
         1 => 0,
         _ => {
-            let mut imax: usize = 0;
-            let mut dmax = x[imax].abs();
+            let mut imax = 0;
             for (i, xval) in x.iter().enumerate().take(n).skip(1) {
-                if xval.abs() > dmax {
-                    dmax = xval.abs();
+                if xval.abs() > x[imax].abs() {
                     imax = i;
                 }
             }
@@ -685,17 +682,17 @@ fn svd_norm(x: &[f64]) -> f64 {
 
 #[track_caller]
 // scales an input vector 'x', by a constant, storing in 'y'
-fn svd_datx(da: f64, x: &[f64], y: &mut [f64]) {
-    for (xval, yval) in x.iter().zip(y.iter_mut()) {
-        *yval = da * xval
+fn svd_datx(d: f64, x: &[f64], y: &mut [f64]) {
+    for (i, xval) in x.iter().enumerate() {
+        y[i] = d * xval;
     }
 }
 
 #[track_caller]
 // scales an input vector 'x' by a constant, modifying 'x'
-fn svd_dscal(da: f64, x: &mut [f64]) {
-    for item in x.iter_mut() {
-        *item *= da;
+fn svd_dscal(d: f64, x: &mut [f64]) {
+    for elem in x.iter_mut() {
+        *elem *= d;
     }
 }
 
@@ -761,7 +758,7 @@ fn imtqlb(n: usize, d: &mut [f64], e: &mut [f64], bnd: &mut [f64]) -> Result<(),
     }
     e[last] = 0.0;
 
-    let mut i: i32 = 0;
+    let mut i = 0;
 
     for l in 0..=last {
         let mut iteration = 0;
@@ -782,12 +779,12 @@ fn imtqlb(n: usize, d: &mut [f64], e: &mut [f64], bnd: &mut [f64]) -> Result<(),
             if m == l {
                 // order the eigenvalues
                 let mut exchange = true;
-                if l != 0 {
-                    i = l as i32;
+                if l > 0 {
+                    i = l;
                     while i >= 1 && exchange {
-                        if p < d[(i - 1) as usize] {
-                            d[i as usize] = d[(i - 1) as usize];
-                            bnd[i as usize] = bnd[(i - 1) as usize];
+                        if p < d[i - 1] {
+                            d[i] = d[i - 1];
+                            bnd[i] = bnd[i - 1];
                             i -= 1;
                         } else {
                             exchange = false;
@@ -797,8 +794,8 @@ fn imtqlb(n: usize, d: &mut [f64], e: &mut [f64], bnd: &mut [f64]) -> Result<(),
                 if exchange {
                     i = 0;
                 }
-                d[i as usize] = p;
-                bnd[i as usize] = f;
+                d[i] = p;
+                bnd[i] = f;
                 iteration = 31;
             } else {
                 if iteration == 30 {
@@ -814,32 +811,37 @@ fn imtqlb(n: usize, d: &mut [f64], e: &mut [f64], bnd: &mut [f64]) -> Result<(),
                 let mut s = 1.0;
                 let mut c = 1.0;
                 p = 0.0;
+
+                assert!(m > 0, "imtqlb: expected 'm' to be non-zero");
+                i = m - 1;
                 let mut underflow = false;
-                i = m as i32 - 1;
-                while !underflow && i >= (l as i32) {
-                    f = s * e[i as usize];
-                    let b = c * e[i as usize];
+                while !underflow && i >= l {
+                    f = s * e[i];
+                    let b = c * e[i];
                     r = svd_pythag(f, g);
-                    e[(i + 1) as usize] = r;
+                    e[i + 1] = r;
                     if compare(r, 0.0) {
                         underflow = true;
-                    } else {
-                        s = f / r;
-                        c = g / r;
-                        g = d[(i + 1) as usize] - p;
-                        r = (d[i as usize] - g) * s + 2.0 * c * b;
-                        p = s * r;
-                        d[(i + 1) as usize] = g + p;
-                        g = c * r - b;
-                        f = bnd[(i + 1) as usize];
-                        bnd[(i + 1) as usize] = s * bnd[i as usize] + c * f;
-                        bnd[i as usize] = c * bnd[i as usize] - s * f;
-                        i -= 1;
+                        break;
                     }
+                    s = f / r;
+                    c = g / r;
+                    g = d[i + 1] - p;
+                    r = (d[i] - g) * s + 2.0 * c * b;
+                    p = s * r;
+                    d[i + 1] = g + p;
+                    g = c * r - b;
+                    f = bnd[i + 1];
+                    bnd[i + 1] = s * bnd[i] + c * f;
+                    bnd[i] = c * bnd[i] - s * f;
+                    if i == 0 {
+                        break;
+                    }
+                    i -= 1;
                 }
                 // ........ recover from underflow .........
                 if underflow {
-                    d[(i + 1) as usize] -= p;
+                    d[i + 1] -= p;
                 } else {
                     d[l] -= p;
                     e[l] = g;
@@ -883,7 +885,7 @@ fn imtqlb(n: usize, d: &mut [f64], e: &mut [f64], bnd: &mut [f64]) -> Result<(),
 fn startv(
     A: &CscMatrix<f64>,
     wrk: &mut WorkSpace,
-    step: u32,
+    step: usize,
     store: &mut Store,
     random_seed: u32,
 ) -> Result<f64, SvdLibError> {
@@ -921,7 +923,7 @@ fn startv(
     }
 
     if step > 0 {
-        for i in 0..step as usize {
+        for i in 0..step {
             let v = store.retrq(i);
             svd_daxpy(-svd_ddot(&wrk.w3, v), v, &mut wrk.w0);
         }
@@ -1034,7 +1036,7 @@ fn lanczos_step(
     wrk: &mut WorkSpace,
     first: usize,
     last: usize,
-    ll: &mut u32,
+    ll: &mut usize,
     enough: &mut bool,
     rnm: &mut f64,
     tol: &mut f64,
@@ -1055,7 +1057,7 @@ fn lanczos_step(
 
         // restart if invariant subspace is found
         if compare(*rnm, 0.0) {
-            *rnm = startv(A, wrk, j as u32, store, 0)?;
+            *rnm = startv(A, wrk, j, store, 0)?;
             if compare(*rnm, 0.0) {
                 *enough = true;
             }
@@ -1079,9 +1081,9 @@ fn lanczos_step(
 
         // orthogonalize against initial lanczos vectors
         if j <= MAXLL && wrk.alf[j - 1].abs() > 4.0 * wrk.alf[j].abs() {
-            *ll = j as u32;
+            *ll = j;
         }
-        for i in 0..((j as u32 - 1).min(*ll)) as usize {
+        for i in 0..(j - 1).min(*ll) {
             let v1 = store.retrp(i);
             let t = svd_ddot(v1, &wrk.w0);
             let v2 = store.retrq(i);
@@ -1156,21 +1158,21 @@ fn lanczos_step(
 #[allow(non_snake_case)]
 fn purge(
     n: usize,
-    ll: u32,
+    ll: usize,
     wrk: &mut WorkSpace,
     step: usize,
     rnm: &mut f64,
     tol: f64,
     store: &mut Store,
 ) {
-    if step < 2 + ll as usize {
+    if step < ll + 2 {
         return;
     }
 
     let reps = f64::EPSILON.sqrt();
     let eps1 = f64::EPSILON * (n as f64).sqrt();
 
-    let k = svd_idamax((step as u32 - (ll + 1)) as usize, &wrk.eta) + ll as usize;
+    let k = svd_idamax(step - (ll + 1), &wrk.eta) + ll;
     if wrk.eta[k].abs() > reps {
         let reps1 = eps1 / reps;
         let mut iteration = 0;
@@ -1180,7 +1182,7 @@ fn purge(
                 // bring in a lanczos vector t and orthogonalize both r and q against it
                 let mut tq = 0.0;
                 let mut tr = 0.0;
-                for i in (ll as usize)..step as usize {
+                for i in ll..step {
                     let v = store.retrq(i);
                     let t = svd_ddot(v, &wrk.w3);
                     tq += t.abs();
@@ -1201,7 +1203,7 @@ fn purge(
             }
             iteration += 1;
         }
-        for i in (ll as usize)..=step as usize {
+        for i in ll..=step {
             wrk.eta[i] = eps1;
             wrk.oldeta[i] = eps1;
         }
@@ -1218,7 +1220,7 @@ fn purge(
   Description
   -----------
 
-  Funtion updates the eta recurrence
+  Function updates the eta recurrence
 
   Arguments
   ---------
@@ -1248,7 +1250,7 @@ fn ortbnd(wrk: &mut WorkSpace, step: usize, rnm: f64, eps1: f64) {
             / rnm
             + eps1;
         if step > 2 {
-            for i in 1..=(step as i32 - 2) as usize {
+            for i in 1..=step - 2 {
                 wrk.oldeta[i] = (wrk.bet[i + 1] * wrk.eta[i + 1]
                     + (wrk.alf[i] - wrk.alf[step]) * wrk.eta[i]
                     + wrk.bet[i] * wrk.eta[i - 1]
@@ -1298,31 +1300,31 @@ fn error_bound(
     step: usize,
     tol: f64,
 ) -> usize {
-    // massage error bounds for very close ritz values
-    let mid = svd_idamax(step + 1, bnd) as i32;
+    assert!(step > 0, "error_bound: expected 'step' to be non-zero");
 
-    let mut i: i32 = (((step + 1) + (step - 1)) / 2) as i32;
+    // massage error bounds for very close ritz values
+    let mid = svd_idamax(step + 1, bnd);
+
+    let mut i = ((step + 1) + (step - 1)) / 2;
     while i > mid + 1 {
-        if (ritz[(i - 1) as usize] - ritz[i as usize]).abs() < eps34() * ritz[i as usize].abs()
-            && bnd[i as usize] > tol
-            && bnd[(i - 1) as usize] > tol
+        if (ritz[i - 1] - ritz[i]).abs() < eps34() * ritz[i].abs()
+            && bnd[i] > tol
+            && bnd[i - 1] > tol
         {
-            bnd[(i - 1) as usize] =
-                (bnd[i as usize].powi(2) + bnd[(i - 1) as usize].powi(2)).sqrt();
-            bnd[i as usize] = 0.0;
+            bnd[i - 1] = (bnd[i].powi(2) + bnd[i - 1].powi(2)).sqrt();
+            bnd[i] = 0.0;
         }
         i -= 1;
     }
 
-    let mut i: i32 = (((step + 1) - (step - 1)) / 2) as i32;
-    while i < mid - 1 {
-        if (ritz[(i + 1) as usize] - ritz[i as usize]).abs() < eps34() * ritz[i as usize].abs()
-            && bnd[i as usize] > tol
-            && bnd[(i + 1) as usize] > tol
+    let mut i = ((step + 1) - (step - 1)) / 2;
+    while i + 1 < mid {
+        if (ritz[i + 1] - ritz[i]).abs() < eps34() * ritz[i].abs()
+            && bnd[i] > tol
+            && bnd[i + 1] > tol
         {
-            bnd[(i + 1) as usize] =
-                (bnd[i as usize].powi(2) + bnd[(i + 1) as usize].powi(2)).sqrt();
-            bnd[i as usize] = 0.0;
+            bnd[i + 1] = (bnd[i].powi(2) + bnd[i + 1].powi(2)).sqrt();
+            bnd[i] = 0.0;
         }
         i += 1;
     }
@@ -1337,7 +1339,7 @@ fn error_bound(
         }
         gap = gap.min(gapl);
         if gap > bnd[i] {
-            bnd[i] = bnd[i] * (bnd[i] / gap);
+            bnd[i] *= bnd[i] / gap;
         }
         if bnd[i] <= 16.0 * f64::EPSILON * ritz[i].abs() {
             neig += 1;
@@ -1403,6 +1405,7 @@ fn imtql2(
     if n == 1 {
         return Ok(());
     }
+    assert!(n > 1, "imtql2: expected 'n' to be > 1");
 
     let last = n - 1;
 
@@ -1448,37 +1451,42 @@ fn imtql2(
             let mut s = 1.0;
             let mut c = 1.0;
             let mut p = 0.0;
+
+            assert!(m > 0, "imtql2: expected 'm' to be non-zero");
+            let mut i = m - 1;
             let mut underflow = false;
-            let mut i: i32 = m as i32 - 1;
-            while !underflow && i >= (l as i32) {
-                let mut f = s * e[i as usize];
-                let b = c * e[i as usize];
+            while !underflow && i >= l {
+                let mut f = s * e[i];
+                let b = c * e[i];
                 r = svd_pythag(f, g);
-                e[(i + 1) as usize] = r;
+                e[i + 1] = r;
                 if compare(r, 0.0) {
                     underflow = true;
                 } else {
                     s = f / r;
                     c = g / r;
-                    g = d[(i + 1) as usize] - p;
-                    r = (d[i as usize] - g) * s + 2.0 * c * b;
+                    g = d[i + 1] - p;
+                    r = (d[i] - g) * s + 2.0 * c * b;
                     p = s * r;
-                    d[(i + 1) as usize] = g + p;
+                    d[i + 1] = g + p;
                     g = c * r - b;
 
                     // form vector
                     for k in (0..nnm).step_by(n) {
-                        let index = k + i as usize;
+                        let index = k + i;
                         f = z[index + 1];
                         z[index + 1] = s * z[index] + c * f;
                         z[index] = c * z[index] - s * f;
+                    }
+                    if i == 0 {
+                        break;
                     }
                     i -= 1;
                 }
             } /* end while (underflow != FALSE && i >= l) */
             /*........ recover from underflow .........*/
             if underflow {
-                d[(i + 1) as usize] -= p;
+                d[i + 1] -= p;
             } else {
                 d[l] -= p;
                 e[l] = g;
@@ -1599,7 +1607,7 @@ fn ritvec(
 ) -> Result<SVDRawRec, SvdLibError> {
     let js = steps + 1;
     let jsq = js * js;
-    let mut s = vec![0.0; jsq as usize];
+    let mut s = vec![0.0; jsq];
 
     // initialize s to an identity matrix
     for i in (0..jsq).step_by(js + 1) {
@@ -1617,28 +1625,28 @@ fn ritvec(
 
     // on return from imtql2(), `R.Vt.value` contains eigenvalues in
     // ascending order and `s` contains the corresponding eigenvectors
-    imtql2(js as usize, js as usize, &mut Vt.value, &mut wrk.w5, &mut s)?;
+    imtql2(js, js, &mut Vt.value, &mut wrk.w5, &mut s)?;
 
     let mut nsig = 0;
     let mut x = 0;
     let mut id2 = jsq - js;
-    for k in 0..js as usize {
-        if wrk.bnd[k] <= kappa * wrk.ritz[k].abs() && k as i32 > (js as i32 - neig as i32 - 1) {
+    for k in 0..js {
+        if wrk.bnd[k] <= kappa * wrk.ritz[k].abs() && k + 1 > js - neig {
             x = match x {
                 0 => dimensions - 1,
                 _ => x - 1,
             };
 
             let offset = x * Vt.cols;
-            Vt.value[offset..(offset + Vt.cols)].fill(0.0);
-            let mut idx = id2 as i32;
-            for i in 0..js as usize {
-                if s[idx as usize] != 0.0 {
-                    for (j, item) in store.retrq(i).iter().enumerate().take(Vt.cols as usize) {
-                        Vt.value[j + offset] += s[idx as usize] * item;
+            Vt.value[offset..offset + Vt.cols].fill(0.0);
+            let mut idx = id2 + js;
+            for i in 0..js {
+                idx -= js;
+                if s[idx] != 0.0 {
+                    for (j, item) in store.retrq(i).iter().enumerate().take(Vt.cols) {
+                        Vt.value[j + offset] += s[idx] * item;
                     }
                 }
-                idx -= js as i32;
             }
             nsig += 1;
         }
@@ -1659,13 +1667,13 @@ fn ritvec(
     let mut S = vec![0.0; dimensions];
     let d = dimensions.min(nsig);
 
-    let mut tmp_vec = vec![0.0; Vt.cols as usize];
-    for (i, sval) in S.iter_mut().enumerate().take(d as usize) {
-        let vt_offset = i * Vt.cols as usize;
-        let ut_offset = i * Ut.cols as usize;
+    let mut tmp_vec = vec![0.0; Vt.cols];
+    for (i, sval) in S.iter_mut().enumerate().take(d) {
+        let vt_offset = i * Vt.cols;
+        let ut_offset = i * Ut.cols;
 
-        let vt_vec = &Vt.value[vt_offset..(vt_offset + Vt.cols as usize)];
-        let ut_vec = &mut Ut.value[ut_offset..(ut_offset + Ut.cols as usize)];
+        let vt_vec = &Vt.value[vt_offset..vt_offset + Vt.cols];
+        let ut_vec = &mut Ut.value[ut_offset..ut_offset + Ut.cols];
 
         // multiply by matrix B first
         svd_opb(A, vt_vec, &mut tmp_vec);
@@ -1675,7 +1683,7 @@ fn ritvec(
         *sval = t.sqrt();
 
         svd_daxpy(-t, vt_vec, &mut tmp_vec);
-        wrk.bnd[js as usize] = svd_norm(&tmp_vec) * sval.recip();
+        wrk.bnd[js] = svd_norm(&tmp_vec) * sval.recip();
 
         // multiply by matrix A to get (scaled) left s-vector
         svd_opa(A, vt_vec, ut_vec);
@@ -1806,34 +1814,32 @@ fn lanso(
             if l > j {
                 break;
             }
-            let mut k = j;
-            for i in l..=j {
-                k = i;
+
+            let mut i = l;
+            while i <= j {
                 if compare(wrk.bet[i + 1], 0.0) {
                     break;
                 }
-                k += 1;
+                i += 1;
             }
-            if k > j {
-                k = j;
-            }
+            i = i.min(j);
 
-            // now k is at the end of an unreduced submatrix
-            let sz = k as i32 - l as i32;
-            svd_dcopy((sz + 1) as usize, l, &wrk.alf, &mut wrk.ritz);
-            svd_dcopy(sz as usize, l + 1, &wrk.bet, &mut wrk.w5);
+            // now i is at the end of an unreduced submatrix
+            let sz = i - l;
+            svd_dcopy(sz + 1, l, &wrk.alf, &mut wrk.ritz);
+            svd_dcopy(sz, l + 1, &wrk.bet, &mut wrk.w5);
 
             imtqlb(
-                (sz + 1) as usize,
+                sz + 1,
                 &mut wrk.ritz[l..],
                 &mut wrk.w5[l..],
                 &mut wrk.bnd[l..],
             )?;
 
-            for m in l..=k {
+            for m in l..=i {
                 wrk.bnd[m] = rnm * wrk.bnd[m].abs();
             }
-            l = k + 1;
+            l = i + 1;
         }
 
         // sort eigenvalues into increasing order
@@ -1847,7 +1853,7 @@ fn lanso(
                 last = first + 9;
                 intro = first;
             } else {
-                last = first + 3.max(1 + ((j - intro) * (dim - *neig)) / *neig) as usize;
+                last = first + 3.max(1 + ((j - intro) * (dim - *neig)) / *neig);
             }
             last = last.min(iterations);
         } else {
