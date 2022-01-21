@@ -47,8 +47,8 @@ $v
 
 ### SVD using svdlibrs
 
-```text
 • Cargo.toml dependencies
+```text
 [dependencies]
 svdlibrs = "0.3.0"
 nalgebra-sparse = "0.6.0"
