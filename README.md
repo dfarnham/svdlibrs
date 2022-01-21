@@ -47,50 +47,62 @@ $v
 
 ### SVD using svdlibrs
 
+```text
+• Cargo.toml dependencies
+[dependencies]
+svdlibrs = "0.3.0"
+nalgebra-sparse = "0.6.0"
+ndarray = "0.15.4"
+```
+
 ```rust
 extern crate ndarray;
 use ndarray::prelude::*;
+use nalgebra_sparse::{coo::CooMatrix, csc::CscMatrix};
 use svdlibrs::{svdLAS2, SvdRec};
 
-let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
-coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
-coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
-coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
+#[allow(non_snake_case)]
+fn main() {
+    let mut coo = CooMatrix::<f64>::new(3, 3);
+    coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
+    coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
+    coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
 
-let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-let svd: SvdRec = svdLAS2(
-    &csc,                 // SVDLIBC (SMat) Matrix
-    0,                    // upper limit of desired number of singular triplets (0 == all)
-    &[-1.0e-30, 1.0e-30], // left,right end of interval containing unwanted eigenvalues
-    1e-6,                 // relative accuracy of ritz values acceptable as eigenvalues
-    3141,                 // a supplied random seed if > 0
-)
-.unwrap();
-println!("svd.d = {}\n", svd.d);
-println!("U =\n{:#?}\n", svd.ut.t());
-println!("S =\n{:#?}\n", svd.s);
-println!("V =\n{:#?}\n", svd.vt.t());
+    let csc = CscMatrix::from(&coo);
+    let svd: SvdRec = svdLAS2(
+        &csc,                 // SVDLIBC (SMat) Matrix
+        0,                    // upper limit of desired number of singular triplets (0 == all)
+        &[-1.0e-30, 1.0e-30], // left,right end of interval containing unwanted eigenvalues
+        1e-6,                 // relative accuracy of ritz values acceptable as eigenvalues
+        3141,                 // a supplied random seed if > 0
+    )
+    .unwrap();
+    println!("svd.d = {}\n", svd.d);
+    println!("U =\n{:#?}\n", svd.ut.t());
+    println!("S =\n{:#?}\n", svd.s);
+    println!("V =\n{:#?}\n", svd.vt.t());
 
-// Note: svd.ut & svd.vt are returned in transposed form
-// M = USV*
-let M = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
+    // Note: svd.ut & svd.vt are returned in transposed form
+    // M = USV*
+    let M = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
 
-let epsilon = 1.0e-12;
-assert_eq!(svd.d, 3);
+    let epsilon = 1.0e-12;
+    assert_eq!(svd.d, 3);
 
-assert!((M[[0, 0]] - 1.0).abs() < epsilon);
-assert!((M[[0, 1]] - 16.0).abs() < epsilon);
-assert!((M[[0, 2]] - 49.0).abs() < epsilon);
-assert!((M[[1, 0]] - 4.0).abs() < epsilon);
-assert!((M[[1, 1]] - 25.0).abs() < epsilon);
-assert!((M[[1, 2]] - 64.0).abs() < epsilon);
-assert!((M[[2, 0]] - 9.0).abs() < epsilon);
-assert!((M[[2, 1]] - 36.0).abs() < epsilon);
-assert!((M[[2, 2]] - 81.0).abs() < epsilon);
+    assert!((M[[0, 0]] - 1.0).abs() < epsilon);
+    assert!((M[[0, 1]] - 16.0).abs() < epsilon);
+    assert!((M[[0, 2]] - 49.0).abs() < epsilon);
+    assert!((M[[1, 0]] - 4.0).abs() < epsilon);
+    assert!((M[[1, 1]] - 25.0).abs() < epsilon);
+    assert!((M[[1, 2]] - 64.0).abs() < epsilon);
+    assert!((M[[2, 0]] - 9.0).abs() < epsilon);
+    assert!((M[[2, 1]] - 36.0).abs() < epsilon);
+    assert!((M[[2, 2]] - 81.0).abs() < epsilon);
 
-assert!((svd.s[0] - 123.676578742544).abs() < epsilon);
-assert!((svd.s[1] - 6.084527896514).abs() < epsilon);
-assert!((svd.s[2] - 0.287038004183).abs() < epsilon);
+    assert!((svd.s[0] - 123.676578742544).abs() < epsilon);
+    assert!((svd.s[1] - 6.084527896514).abs() < epsilon);
+    assert!((svd.s[2] - 0.287038004183).abs() < epsilon);
+}
 ```
 
 ### Output
