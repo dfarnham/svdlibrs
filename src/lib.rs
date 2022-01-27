@@ -1,10 +1,108 @@
 //! # svdlibrs
 //!
-//! A Rust port of LAS2 from SVDLIBC.
+//! A library that computes an svd on a sparse matrix, typically a large sparse matrix
 //!
-//! It performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [CscMatrix](https://docs.rs/nalgebra-sparse/0.5.0/nalgebra_sparse/csc/struct.CscMatrix.html) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm) and returns the decomposition as [ndarray](https://docs.rs/ndarray/0.15.3/ndarray/) components.
+//! A Rust port of LAS2 from SVDLIBC
 //!
-//! # SVD Examples
+//! This is a functional port (mostly a translation) of the algorithm as seen in Doug Rohde's SVDLIBC
+//!
+//! This library performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [CscMatrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/csc/struct.CscMatrix.html) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm) and returns the decomposition as [ndarray](https://docs.rs/ndarray/latest/ndarray/) components.
+//!
+//! # Usage
+//!
+//! Input: [CscMatrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/csc/struct.CscMatrix.html)
+//!
+//! Output: decomposition U,S,V where U,V are [Array2](https://docs.rs/ndarray/latest/ndarray/type.Array2.html) and S is [Array1](https://docs.rs/ndarray/latest/ndarray/type.Array1.html)
+//!
+//! The above [ndarray](https://docs.rs/ndarray/latest/ndarray/) components along with the computed dimension and
+//! informational diagnostics are packaged as a Result
+//!
+//! # Example Library Usage
+//!
+//! ```rust
+//! # extern crate ndarray;
+//! # use ndarray::prelude::*;
+//! use svdlibrs::svd;
+//! # let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(2, 2);
+//! # coo.push(0, 0, 1.0);
+//! # coo.push(1, 0, 3.0);
+//! # coo.push(1, 1, -5.0);
+//!
+//! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
+//! /// svd on a sparse matrix
+//! let svd = svd(&csc)?;
+//! # Ok::<(), svdlibrs::error::SvdLibError>(())
+//! ```
+//! ```rust
+//! # extern crate ndarray;
+//! # use ndarray::prelude::*;
+//! use svdlibrs::svd_dim;
+//! # let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
+//! # coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
+//! # coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
+//! # coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
+//!
+//! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
+//! /// svd on a sparse matrix specifying a desired dimension, 3 in this example.
+//! let svd = svd_dim(&csc, 3)?;
+//! # Ok::<(), svdlibrs::error::SvdLibError>(())
+//! ```
+//! ```rust
+//! # extern crate ndarray;
+//! # use ndarray::prelude::*;
+//! use svdlibrs::svd_dim_seed;
+//! # let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
+//! # coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
+//! # coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
+//! # coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
+//! # let dimension = 3;
+//!
+//! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
+//! /// svd on a sparse matrix requesting the dimension
+//! /// and supplying a fixed seed to the LAS2 algorithm
+//! let svd = svd_dim_seed(&csc, dimension, 12345)?;
+//! # Ok::<(), svdlibrs::error::SvdLibError>(())
+//! ```
+//! # The above examples use svdLAS2 as shown below
+//! ```rust
+//! # extern crate ndarray;
+//! # use ndarray::prelude::*;
+//! use svdlibrs::{svd, svd_dim, svd_dim_seed, svdLAS2, SvdRec};
+//! # let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
+//! # coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
+//! # coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
+//! # coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
+//! # let dimension = 3;
+//!
+//! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
+//! /// These are equivalent:
+//! let svd = svd(&csc)?;
+//! let svd = svdLAS2(&csc, 0, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)?;
+//!
+//! /// These are equivalent:
+//! let svd = svd_dim(&csc, dimension)?;
+//! let svd = svdLAS2(&csc, dimension, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)?;
+//!
+//! /// These are equivalent:
+//! let random_seed = 12345;
+//! let svd = svd_dim_seed(&csc, dimension, random_seed)?;
+//! let svd = svdLAS2(&csc, dimension, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)?;
+//!
+//! /// Parameter description
+//! let svd: SvdRec = svdLAS2(
+//!     &csc,                 // sparse matrix
+//!     0,                    // upper limit of desired number of singular triplets (0 = all)
+//!     0,                    // number of algorithm iterations (0 = smaller of csc rows or columns),
+//!                           // the upper limit of desired number of lanczos steps
+//!     &[-1.0e-30, 1.0e-30], // left, right end of interval containing unwanted eigenvalues,
+//!                           // typically small values centered around zero, e.g. [-1.0e-30, 1.0e-30]
+//!     1.0e-6,               // relative accuracy of ritz values acceptable as eigenvalues
+//!     0,                    // a supplied seed if > 0, otherwise an internal seed will be generated
+//! )?;
+//! # Ok::<(), svdlibrs::error::SvdLibError>(())
+//! ```
+//!
+//! # More SVD Examples
 //!
 //! ### SVD using [R](https://www.r-project.org/)
 //!
@@ -47,22 +145,19 @@
 //! ```rust
 //! # extern crate ndarray;
 //! # use ndarray::prelude::*;
-//! use svdlibrs::{svdLAS2, SvdRec};
+//! use svdlibrs::svd_dim_seed;
+//! use nalgebra_sparse::{coo::CooMatrix, csc::CscMatrix};
 //!
-//! let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
+//! let mut coo = CooMatrix::<f64>::new(3, 3);
 //! coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
 //! coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
 //! coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
 //!
-//! let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-//! let svd: SvdRec = svdLAS2(
-//!     &csc,                 // SVDLIBC (SMat) Matrix
-//!     0,                    // upper limit of desired number of singular triplets (0 == all)
-//!     &[-1.0e-30, 1.0e-30], // left,right end of interval containing unwanted eigenvalues
-//!     1e-6,                 // relative accuracy of ritz values acceptable as eigenvalues
-//!     3141,                 // a supplied random seed if > 0
-//! )
-//! .unwrap();
+//! let csc = CscMatrix::from(&coo);
+//! let svd = svd_dim_seed(&csc, 0, 3141).unwrap();
+//! assert_eq!(svd.d, svd.ut.nrows());
+//! assert_eq!(svd.d, svd.s.dim());
+//! assert_eq!(svd.d, svd.vt.nrows());
 //! println!("svd.d = {}\n", svd.d);
 //! println!("U =\n{:#?}\n", svd.ut.t());
 //! println!("S =\n{:#?}\n", svd.s);
@@ -108,9 +203,36 @@
 //!  [-0.3756889918994792, 0.6986910001499903, 0.6088420712097343],
 //!  [-0.9238083467337805, -0.33460727276072516, -0.18605405537270261]], shape=[3, 3], strides=[1, 3], layout=Ff (0xa), const ndim=2
 //! ```
+//!
+//! # Result\<SvdRec\> for above example looks like this:
+//! ```text
+//! svd = Ok(
+//!     SvdRec {
+//!         d: 3,
+//!         ut: [[-0.4152068408862081, -0.556377565193878, -0.719755016814907],
+//!              [-0.7534435856189199, -0.23308021364108839, 0.6148140997884891],
+//!              [-0.5098294249756481, 0.7975698207417085, -0.3224226084985998]], shape=[3, 3], strides=[3, 1], layout=Cc (0x5), const ndim=2,
+//!         s: [123.67657874254405, 6.084527896513759, 0.2870380041828973], shape=[3], strides=[1], layout=CFcf (0xf), const ndim=1,
+//!         vt: [[-0.07372869095916511, -0.3756889918994792, -0.9238083467337805],
+//!              [0.6323518477280158, 0.6986910001499903, -0.33460727276072516],
+//!              [-0.7711648467120451, 0.6088420712097343, -0.18605405537270261]], shape=[3, 3], strides=[3, 1], layout=Cc (0x5), const ndim=2,
+//!         diagnostics: Diagnostics {
+//!             non_zero: 9,
+//!             dimensions: 3,
+//!             iterations: 3,
+//!             transposed: false,
+//!             lanczos_steps: 3,
+//!             ritz_values_stabilized: 3,
+//!             significant_values: 3,
+//!             singular_values: 3,
+//!             random_seed: 3141,
+//!         },
+//!     },
+//! )
+//! ```
 
 // ==================================================================================
-// This is a functional port of "svdLAS2()" from Doug Rohde's SVDLIBC.
+// This is a functional port (mostly a translation) of "svdLAS2()" from Doug Rohde's SVDLIBC
 // It uses the same conceptual "workspace" storage as the C implementation.
 // Most of the original function & variable names have been preserved.
 // All C-style comments /* ... */ are from the original source, provided for context.
@@ -265,12 +387,12 @@ use error::SvdLibError;
 /// Singular Value Decomposition Components
 ///
 /// # Fields
-/// - d:  dimensionality (rank), number of Ut,Vt rows & length of S,
-///       vectors need to be truncated to this dimensionality
-/// - ut: transpose of left singular vectors, the vectors are the rows of `ut`
-/// - s:  singular values (length `d`)
-/// - vt: transpose of right singular vectors, the vectors are the rows of `vt`
-/// - diagnostics: computational diagnostics
+/// - d:  Dimensionality (rank), the number of rows of both `ut`, `vt` and the length of `s`
+/// - ut: Transpose of left singular vectors, the vectors are the rows of `ut`
+/// - s:  Singular values (length `d`)
+/// - vt: Transpose of right singular vectors, the vectors are the rows of `vt`
+/// - diagnostics: Computational diagnostics
+#[derive(Debug, Clone, PartialEq)]
 pub struct SvdRec {
     pub d: usize,
     pub ut: Array2<f64>,
@@ -282,55 +404,128 @@ pub struct SvdRec {
 /// Computational Diagnostics
 ///
 /// # Fields
-/// - non_zero:  the number of non-zeros in the matrix
-/// - dimensions: actual dimensions attempted (bounded by matrix shape)
-/// - transposed:  true if the matrix was transposed internally
-/// - lanczos_steps: the number of Lanczos steps performed
-/// - ritz_values_stabilized: the number of ritz values
-/// - significant_values: the number of significant values discovered
-/// - singular_values: the number of singular values returned
+/// - non_zero:  The number of non-zeros in the matrix
+/// - dimensions: Number of dimensions attempted (bounded by matrix shape)
+/// - iterations: Number of iterations attempted (bounded by dimensions and matrix shape)
+/// - transposed:  True if the matrix was transposed internally
+/// - lanczos_steps: The number of Lanczos steps performed
+/// - ritz_values_stabilized: The number of ritz values
+/// - significant_values: The number of significant values discovered
+/// - singular_values: The number of singular values returned
+/// - random_seed: The random seed provided or the seed generated
+#[derive(Debug, Clone, PartialEq)]
 pub struct Diagnostics {
     pub non_zero: usize,
     pub dimensions: usize,
+    pub iterations: usize,
     pub transposed: bool,
     pub lanczos_steps: usize,
     pub ritz_values_stabilized: usize,
     pub significant_values: usize,
     pub singular_values: usize,
+    pub random_seed: u32,
+}
+
+/// Compute a singular value decomposition at full dimensionality
+///   Convenience method, equivalent to:
+///   svdLAS2(csc, 0, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
+///
+/// # Parameters
+/// - csc: Compressed sparse column matrix
+pub fn svd(csc: &CscMatrix<f64>) -> Result<SvdRec, SvdLibError> {
+    svdLAS2(csc, 0, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
+}
+
+/// Compute a singular value decomposition at desired dimensionality
+///   Convenience method, equivalent to:
+///   svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
+///
+/// # Parameters
+/// - csc: Compressed sparse column matrix
+/// - dimensions: Upper limit of desired number of singular triplets (0 = max),
+///     where "max" is a value bounded by the matrix shape, the smaller of
+///     the csc matrix rows or columns. e.g. csc.nrows().min(csc.ncols())
+pub fn svd_dim(csc: &CscMatrix<f64>, dimensions: usize) -> Result<SvdRec, SvdLibError> {
+    svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
+}
+
+/// Compute a singular value decomposition at desired dimensionality with supplied seed
+///   Convenience method, equivalent to:
+///   svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)
+///
+/// # Parameters
+/// - csc: Compressed sparse column matrix
+/// - dimensions: Upper limit of desired number of singular triplets (0 = max),
+///     where "max" is a value bounded by the matrix shape, the smaller of
+///     the csc matrix rows or columns. e.g. csc.nrows().min(csc.ncols())
+/// - random_seed: A supplied seed if > 0, otherwise an internal seed will be generated
+pub fn svd_dim_seed(
+    csc: &CscMatrix<f64>,
+    dimensions: usize,
+    random_seed: u32,
+) -> Result<SvdRec, SvdLibError> {
+    svdLAS2(
+        csc,
+        dimensions,
+        0,
+        &[-1.0e-30, 1.0e-30],
+        1.0e-6,
+        random_seed,
+    )
 }
 
 #[allow(clippy::redundant_field_names)]
 #[allow(non_snake_case)]
-#[track_caller]
 /// Compute a singular value decomposition
 ///
 /// # Parameters
-/// - csc: compressed sparse column matrix
-/// - dim: upper limit of desired number of singular triplets (0 == all)
-/// - end: left,right end of interval containing unwanted eigenvalues
-/// - kappa: relative accuracy of ritz values acceptable as eigenvalues
-/// - random_seed: a supplied seed if > 0, otherwise an internal seed will be generated
+/// - csc: Compressed sparse column matrix
+/// - dimensions: Upper limit of desired number of singular triplets (0 = max),
+///       where "max" is a value bounded by the matrix shape, the smaller of
+///       the csc matrix rows or columns. e.g. csc.nrows().min(csc.ncols())
+/// - iterations: Upper limit of desired number of lanczos steps (0 = max),
+///       iterations must be in range [dimensions, csc.nrows().min(csc.ncols())] and will be
+///       adjusted to the min/max range endpoint if supplied value is outside the range
+/// - end: Left, right end of interval containing unwanted eigenvalues,
+///       typically small values centered around zero, e.g. [-1.0e-30, 1.0e-30]
+/// - kappa: Relative accuracy of ritz values acceptable as eigenvalues
+/// - random_seed: A supplied seed if > 0, otherwise an internal seed will be generated
 /// # Returns
 /// SvdRec struct containing the decomposition
 pub fn svdLAS2(
     csc: &CscMatrix<f64>,
-    dim: usize,
+    dimensions: usize,
+    iterations: usize,
     end: &[f64; 2],
     kappa: f64,
     random_seed: u32,
 ) -> Result<SvdRec, SvdLibError> {
-    let iterations = csc.nrows().min(csc.ncols());
-    let dimensions = match dim.min(iterations) {
-        n if n > 0 => n,
+    let random_seed = match random_seed > 0 {
+        true => random_seed,
+        false => thread_rng().gen::<_>(),
+    };
+
+    let matrix_min_dim = csc.nrows().min(csc.ncols());
+
+    let dimensions = match dimensions {
+        n if n == 0 || n > matrix_min_dim => matrix_min_dim,
+        _ => dimensions,
+    };
+
+    let iterations = match iterations {
+        n if n == 0 || n > matrix_min_dim => matrix_min_dim,
+        n if n < dimensions => dimensions,
         _ => iterations,
     };
 
     if dimensions < 2 {
         return Err(SvdLibError::Las2Error(format!(
-            "svdLAS2: insufficient dimensions: {}",
-            dimensions
+            "svdLAS2: insufficient dimensions: {dimensions}"
         )));
     }
+
+    assert!(dimensions > 1 && dimensions <= matrix_min_dim);
+    assert!(iterations >= dimensions && iterations <= matrix_min_dim);
 
     // If the matrix is wide, the SVD is computed on its transpose for speed
     let transpose = csc.ncols() as f64 >= (csc.nrows() as f64 * 1.2);
@@ -370,19 +565,20 @@ pub fn svdLAS2(
 
     Ok(SvdRec {
         // Dimensionality (number of Ut,Vt rows & length of S)
-        // Column vectors need to be truncated to this dimensionality
         d: R.d,
-        ut: Array::from_shape_vec((R.Ut.rows, R.Ut.cols), R.Ut.value)?,
-        s: Array::from_shape_vec(R.S.len(), R.S)?,
-        vt: Array::from_shape_vec((R.Vt.rows, R.Vt.cols), R.Vt.value)?,
+        ut: Array::from_shape_vec((R.d, R.Ut.cols), R.Ut.value)?,
+        s: Array::from_shape_vec(R.d, R.S)?,
+        vt: Array::from_shape_vec((R.d, R.Vt.cols), R.Vt.value)?,
         diagnostics: Diagnostics {
             non_zero: A.nnz(),
             dimensions: dimensions,
+            iterations: iterations,
             transposed: transpose,
             lanczos_steps: steps + 1,
             ritz_values_stabilized: neig,
             significant_values: R.d,
             singular_values: R.nsig,
+            random_seed: random_seed,
         },
     })
 }
@@ -502,19 +698,17 @@ impl WorkSpace {
 }
 
 /* Row-major dense matrix.  Rows are consecutive vectors. */
-#[allow(non_snake_case)]
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 struct DMat {
     //long rows;
     //long cols;
     //double **value; /* Accessed by [row][col]. Free value[0] and value to free.*/
-    rows: usize,
     cols: usize,
     value: Vec<f64>,
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 struct SVDRawRec {
     //int d;      /* Dimensionality (rank) */
     //DMat Ut;    /* Transpose of left singular vectors. (d by m)
@@ -532,12 +726,10 @@ struct SVDRawRec {
 // =================================================================
 
 // compare two floats within epsilon
-#[track_caller]
 fn compare(computed: f64, expected: f64) -> bool {
     (expected - computed).abs() < f64::EPSILON
 }
 
-#[track_caller]
 /* Function sorts array1 and array2 into increasing order for array1 */
 fn insert_sort<T: PartialOrd>(n: usize, array1: &mut [T], array2: &mut [T]) {
     for i in 1..n {
@@ -552,7 +744,6 @@ fn insert_sort<T: PartialOrd>(n: usize, array1: &mut [T], array2: &mut [T]) {
 }
 
 #[allow(non_snake_case)]
-#[track_caller]
 // takes an n-vector x and returns A*x in y
 fn svd_opa(A: &CscMatrix<f64>, x: &[f64], y: &mut [f64]) {
     assert_eq!(
@@ -580,7 +771,6 @@ fn svd_opa(A: &CscMatrix<f64>, x: &[f64], y: &mut [f64]) {
 }
 
 #[allow(non_snake_case)]
-#[track_caller]
 // takes an n-vector x and returns B*x in y
 fn svd_opb(A: &CscMatrix<f64>, x: &[f64], y: &mut [f64]) {
     assert_eq!(
@@ -610,7 +800,6 @@ fn svd_opb(A: &CscMatrix<f64>, x: &[f64], y: &mut [f64]) {
     }
 }
 
-#[track_caller]
 // constant times a vector plus a vector
 fn svd_daxpy(da: f64, x: &[f64], y: &mut [f64]) {
     for (xval, yval) in x.iter().zip(y.iter_mut()) {
@@ -618,7 +807,6 @@ fn svd_daxpy(da: f64, x: &[f64], y: &mut [f64]) {
     }
 }
 
-#[track_caller]
 // finds the index of element having max absolute value
 fn svd_idamax(n: usize, x: &[f64]) -> usize {
     assert!(n > 0, "svd_idamax: unexpected inputs!");
@@ -637,7 +825,6 @@ fn svd_idamax(n: usize, x: &[f64]) -> usize {
     }
 }
 
-#[track_caller]
 // returns |a| if b is positive; else fsign returns -|a|
 fn svd_fsign(a: f64, b: f64) -> f64 {
     match a >= 0.0 && b >= 0.0 || a < 0.0 && b < 0.0 {
@@ -646,8 +833,6 @@ fn svd_fsign(a: f64, b: f64) -> f64 {
     }
 }
 
-#[allow(clippy::many_single_char_names)]
-#[track_caller]
 // finds sqrt(a^2 + b^2) without overflow or destructive underflow
 fn svd_pythag(a: f64, b: f64) -> f64 {
     match a.abs().max(b.abs()) {
@@ -668,19 +853,16 @@ fn svd_pythag(a: f64, b: f64) -> f64 {
     }
 }
 
-#[track_caller]
 // dot product of two vectors
 fn svd_ddot(x: &[f64], y: &[f64]) -> f64 {
     x.iter().zip(y).map(|(a, b)| a * b).sum()
 }
 
-#[track_caller]
 // norm (length) of a vector
 fn svd_norm(x: &[f64]) -> f64 {
     svd_ddot(x, x).sqrt()
 }
 
-#[track_caller]
 // scales an input vector 'x', by a constant, storing in 'y'
 fn svd_datx(d: f64, x: &[f64], y: &mut [f64]) {
     for (i, xval) in x.iter().enumerate() {
@@ -688,7 +870,6 @@ fn svd_datx(d: f64, x: &[f64], y: &mut [f64]) {
     }
 }
 
-#[track_caller]
 // scales an input vector 'x' by a constant, modifying 'x'
 fn svd_dscal(d: f64, x: &mut [f64]) {
     for elem in x.iter_mut() {
@@ -697,7 +878,6 @@ fn svd_dscal(d: f64, x: &mut [f64]) {
 }
 
 // copies a vector x to a vector y (reversed direction)
-#[track_caller]
 fn svd_dcopy(n: usize, offset: usize, x: &[f64], y: &mut [f64]) {
     assert!(n > 0, "svd_dcopy: unexpected inputs!");
 
@@ -743,8 +923,6 @@ fn svd_dcopy(n: usize, offset: usize, x: &[f64], y: &mut [f64]) {
            indices 0,1,...ierr, but may not be the smallest eigenvalues.
   e      has been destroyed.
 ***********************************************************************/
-#[track_caller]
-#[allow(clippy::many_single_char_names)]
 fn imtqlb(n: usize, d: &mut [f64], e: &mut [f64], bnd: &mut [f64]) -> Result<(), SvdLibError> {
     if n == 1 {
         return Ok(());
@@ -880,7 +1058,6 @@ fn imtqlb(n: usize, d: &mut [f64], e: &mut [f64], bnd: &mut [f64]) -> Result<(),
   wptr   array of pointers that point to work space that contains
          r[j], q[j], q[j-1], p[j], p[j-1]
 ***********************************************************************/
-#[track_caller]
 #[allow(non_snake_case)]
 fn startv(
     A: &CscMatrix<f64>,
@@ -893,16 +1070,12 @@ fn startv(
     let mut rnm2 = svd_ddot(&wrk.w0, &wrk.w0);
     for id in 0..3 {
         if id > 0 || step > 0 || compare(rnm2, 0.0) {
-            if random_seed > 0 {
-                let mut bytes = [0; 32];
-                for (i, b) in random_seed.to_le_bytes().iter().enumerate() {
-                    bytes[i] = *b;
-                }
-                let mut seeded_rng = StdRng::from_seed(bytes);
-                wrk.w0.fill_with(|| seeded_rng.gen_range(-1.0..1.0));
-            } else {
-                wrk.w0.fill_with(|| thread_rng().gen_range(-1.0..1.0));
+            let mut bytes = [0; 32];
+            for (i, b) in random_seed.to_le_bytes().iter().enumerate() {
+                bytes[i] = *b;
             }
+            let mut seeded_rng = StdRng::from_seed(bytes);
+            wrk.w0.fill_with(|| seeded_rng.gen_range(-1.0..1.0));
         }
         wrk.w3.copy_from_slice(&wrk.w0);
 
@@ -969,7 +1142,6 @@ fn startv(
            wptr[4]             p[j-1]
            wptr[6]             diagonal elements of matrix T
 ***********************************************************************/
-#[track_caller]
 #[allow(non_snake_case)]
 fn stpone(
     A: &CscMatrix<f64>,
@@ -1028,7 +1200,6 @@ fn stpone(
              (has value of 0, 1 or 2)
   enough   stop flag
 ***********************************************************************/
-#[track_caller]
 #[allow(non_snake_case)]
 #[allow(clippy::too_many_arguments)]
 fn lanczos_step(
@@ -1154,8 +1325,6 @@ fn lanczos_step(
              vectors
   q        current Lanczos vector orthogonalized against previous ones
 ***********************************************************************/
-#[track_caller]
-#[allow(non_snake_case)]
 fn purge(
     n: usize,
     ll: usize,
@@ -1239,7 +1408,6 @@ fn purge(
   eta      orthogonality estimate of Lanczos vectors at step j+1
   oldeta   orthogonality estimate of Lanczos vectors at step j
 ***********************************************************************/
-#[track_caller]
 fn ortbnd(wrk: &mut WorkSpace, step: usize, rnm: f64, eps1: f64) {
     if step < 1 {
         return;
@@ -1290,7 +1458,6 @@ fn ortbnd(wrk: &mut WorkSpace, step: usize, rnm: f64, eps1: f64) {
   bnd      array to store the error bounds
   enough   stop flag
 ***********************************************************************/
-#[track_caller]
 fn error_bound(
     enough: &mut bool,
     endl: f64,
@@ -1393,8 +1560,6 @@ fn error_bound(
            z contains the eigenvectors associated with the stored
          eigenvalues.
 ***********************************************************************/
-#[track_caller]
-#[allow(clippy::many_single_char_names)]
 fn imtql2(
     nm: usize,
     n: usize,
@@ -1520,9 +1685,7 @@ fn imtql2(
     Ok(())
 }
 
-#[track_caller]
-#[allow(non_snake_case)]
-fn rotateArray(a: &mut [f64], x: usize) {
+fn rotate_array(a: &mut [f64], x: usize) {
     let n = a.len();
     let mut j = 0;
     let mut start = 0;
@@ -1593,9 +1756,7 @@ fn rotateArray(a: &mut [f64], x: usize) {
              s contains the orthonormal eigenvectors of the symmetric
              tridiagonal matrix T
 ***********************************************************************/
-#[track_caller]
 #[allow(non_snake_case)]
-#[allow(clippy::too_many_arguments)]
 fn ritvec(
     A: &CscMatrix<f64>,
     dimensions: usize,
@@ -1615,7 +1776,6 @@ fn ritvec(
     }
 
     let mut Vt = DMat {
-        rows: dimensions,
         cols: A.ncols(),
         value: vec![0.0; A.ncols() * dimensions],
     };
@@ -1656,19 +1816,20 @@ fn ritvec(
     // Rotate the singular vectors and values.
     // `x` is now the location of the highest singular value.
     if x > 0 {
-        rotateArray(&mut Vt.value, x * Vt.cols);
+        rotate_array(&mut Vt.value, x * Vt.cols);
     }
 
-    let mut Ut = DMat {
-        rows: dimensions,
-        cols: A.nrows(),
-        value: vec![0.0; A.nrows() * dimensions],
-    };
-    let mut S = vec![0.0; dimensions];
+    // final dimension size
     let d = dimensions.min(nsig);
+    let mut S = vec![0.0; d];
+    let mut Ut = DMat {
+        cols: A.nrows(),
+        value: vec![0.0; A.nrows() * d],
+    };
+    Vt.value.resize(Vt.cols * d, 0.0);
 
     let mut tmp_vec = vec![0.0; Vt.cols];
-    for (i, sval) in S.iter_mut().enumerate().take(d) {
+    for (i, sval) in S.iter_mut().enumerate() {
         let vt_offset = i * Vt.cols;
         let ut_offset = i * Ut.cols;
 
@@ -1752,7 +1913,6 @@ fn ritvec(
             ierr = k if convergence did not occur for k-th eigenvalue
                    in imtqlb()
 ***********************************************************************/
-#[track_caller]
 #[allow(non_snake_case)]
 #[allow(clippy::too_many_arguments)]
 fn lanso(
@@ -1870,7 +2030,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(non_snake_case)]
+    #[rustfmt::skip]
     fn basic_2x2() {
         // [
         //   [ 4,  0 ],
@@ -1882,30 +2042,21 @@ mod tests {
         coo.push(1, 1, -5.0);
 
         let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-
-        let svd: SvdRec = svdLAS2(
-            &csc,                 // SVDLIBC "A" (SMat) Matrix
-            0,                    // upper limit of desired number of singular triplets (0 == all)
-            &[-1.0e-30, 1.0e-30], // left,right end of interval containing unwanted eigenvalues
-            1e-6,                 // relative accuracy of ritz values acceptable as eigenvalues
-            0,                    // a supplied random seed if > 0
-        )
-        .unwrap();
-        println!("svd.d = {}", svd.d);
-        println!("U = {:#?}", svd.ut.t());
-        println!("S = {:#?}", svd.s);
-        println!("V = {:#?}", svd.vt.t());
+        let svd = svd(&csc).unwrap();
+        assert_eq!(svd.d, svd.ut.nrows());
+        assert_eq!(svd.d, svd.s.dim());
+        assert_eq!(svd.d, svd.vt.nrows());
 
         // Note: svd.ut & svd.vt are returned in transposed form
         // M = USV*
-        let M = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
+        let matrix_approximation = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
 
         let epsilon = 1.0e-12;
         assert_eq!(svd.d, 2);
-        assert!((M[[0, 0]] - 4.0).abs() < epsilon);
-        assert!((M[[0, 1]] - 0.0).abs() < epsilon);
-        assert!((M[[1, 0]] - 3.0).abs() < epsilon);
-        assert!((M[[1, 1]] - -5.0).abs() < epsilon);
+        assert!((matrix_approximation[[0, 0]] - 4.0).abs() < epsilon);
+        assert!((matrix_approximation[[0, 1]] - 0.0).abs() < epsilon);
+        assert!((matrix_approximation[[1, 0]] - 3.0).abs() < epsilon);
+        assert!((matrix_approximation[[1, 1]] - -5.0).abs() < epsilon);
 
         assert!((svd.s[0] - 6.3245553203368).abs() < epsilon);
         assert!((svd.s[1] - 3.1622776601684).abs() < epsilon);
