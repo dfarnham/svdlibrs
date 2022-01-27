@@ -459,19 +459,8 @@ pub fn svd_dim(csc: &CscMatrix<f64>, dimensions: usize) -> Result<SvdRec, SvdLib
 ///     where "max" is a value bounded by the matrix shape, the smaller of
 ///     the csc matrix rows or columns. e.g. csc.nrows().min(csc.ncols())
 /// - random_seed: A supplied seed if > 0, otherwise an internal seed will be generated
-pub fn svd_dim_seed(
-    csc: &CscMatrix<f64>,
-    dimensions: usize,
-    random_seed: u32,
-) -> Result<SvdRec, SvdLibError> {
-    svdLAS2(
-        csc,
-        dimensions,
-        0,
-        &[-1.0e-30, 1.0e-30],
-        1.0e-6,
-        random_seed,
-    )
+pub fn svd_dim_seed(csc: &CscMatrix<f64>, dimensions: usize, random_seed: u32) -> Result<SvdRec, SvdLibError> {
+    svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)
 }
 
 #[allow(clippy::redundant_field_names)]
@@ -1089,10 +1078,7 @@ fn startv(
     }
 
     if rnm2 <= 0.0 {
-        return Err(SvdLibError::StartvError(format!(
-            "rnm2 <= 0.0, rnm2 = {}",
-            rnm2
-        )));
+        return Err(SvdLibError::StartvError(format!("rnm2 <= 0.0, rnm2 = {}", rnm2)));
     }
 
     if step > 0 {
@@ -1325,15 +1311,7 @@ fn lanczos_step(
              vectors
   q        current Lanczos vector orthogonalized against previous ones
 ***********************************************************************/
-fn purge(
-    n: usize,
-    ll: usize,
-    wrk: &mut WorkSpace,
-    step: usize,
-    rnm: &mut f64,
-    tol: f64,
-    store: &mut Store,
-) {
+fn purge(n: usize, ll: usize, wrk: &mut WorkSpace, step: usize, rnm: &mut f64, tol: f64, store: &mut Store) {
     if step < ll + 2 {
         return;
     }
@@ -1413,10 +1391,9 @@ fn ortbnd(wrk: &mut WorkSpace, step: usize, rnm: f64, eps1: f64) {
         return;
     }
     if !compare(rnm, 0.0) && step > 1 {
-        wrk.oldeta[0] = (wrk.bet[1] * wrk.eta[1] + (wrk.alf[0] - wrk.alf[step]) * wrk.eta[0]
-            - wrk.bet[step] * wrk.oldeta[0])
-            / rnm
-            + eps1;
+        wrk.oldeta[0] =
+            (wrk.bet[1] * wrk.eta[1] + (wrk.alf[0] - wrk.alf[step]) * wrk.eta[0] - wrk.bet[step] * wrk.oldeta[0]) / rnm
+                + eps1;
         if step > 2 {
             for i in 1..=step - 2 {
                 wrk.oldeta[i] = (wrk.bet[i + 1] * wrk.eta[i + 1]
@@ -1474,10 +1451,7 @@ fn error_bound(
 
     let mut i = ((step + 1) + (step - 1)) / 2;
     while i > mid + 1 {
-        if (ritz[i - 1] - ritz[i]).abs() < eps34() * ritz[i].abs()
-            && bnd[i] > tol
-            && bnd[i - 1] > tol
-        {
+        if (ritz[i - 1] - ritz[i]).abs() < eps34() * ritz[i].abs() && bnd[i] > tol && bnd[i - 1] > tol {
             bnd[i - 1] = (bnd[i].powi(2) + bnd[i - 1].powi(2)).sqrt();
             bnd[i] = 0.0;
         }
@@ -1486,10 +1460,7 @@ fn error_bound(
 
     let mut i = ((step + 1) - (step - 1)) / 2;
     while i + 1 < mid {
-        if (ritz[i + 1] - ritz[i]).abs() < eps34() * ritz[i].abs()
-            && bnd[i] > tol
-            && bnd[i + 1] > tol
-        {
+        if (ritz[i + 1] - ritz[i]).abs() < eps34() * ritz[i].abs() && bnd[i] > tol && bnd[i + 1] > tol {
             bnd[i + 1] = (bnd[i].powi(2) + bnd[i + 1].powi(2)).sqrt();
             bnd[i] = 0.0;
         }
@@ -1560,13 +1531,7 @@ fn error_bound(
            z contains the eigenvectors associated with the stored
          eigenvalues.
 ***********************************************************************/
-fn imtql2(
-    nm: usize,
-    n: usize,
-    d: &mut [f64],
-    e: &mut [f64],
-    z: &mut [f64],
-) -> Result<(), SvdLibError> {
+fn imtql2(nm: usize, n: usize, d: &mut [f64], e: &mut [f64], z: &mut [f64]) -> Result<(), SvdLibError> {
     if n == 1 {
         return Ok(());
     }
@@ -1949,17 +1914,7 @@ fn lanso(
         }
 
         // the actual lanczos loop
-        let steps = lanczos_step(
-            A,
-            wrk,
-            first,
-            last,
-            &mut ll,
-            &mut enough,
-            &mut rnm,
-            &mut tol,
-            store,
-        )?;
+        let steps = lanczos_step(A, wrk, first, last, &mut ll, &mut enough, &mut rnm, &mut tol, store)?;
         j = match enough {
             true => steps - 1,
             false => last - 1,
@@ -1989,12 +1944,7 @@ fn lanso(
             svd_dcopy(sz + 1, l, &wrk.alf, &mut wrk.ritz);
             svd_dcopy(sz, l + 1, &wrk.bet, &mut wrk.w5);
 
-            imtqlb(
-                sz + 1,
-                &mut wrk.ritz[l..],
-                &mut wrk.w5[l..],
-                &mut wrk.bnd[l..],
-            )?;
+            imtqlb(sz + 1, &mut wrk.ritz[l..], &mut wrk.w5[l..], &mut wrk.bnd[l..])?;
 
             for m in l..=i {
                 wrk.bnd[m] = rnm * wrk.bnd[m].abs();
