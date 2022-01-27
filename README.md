@@ -32,15 +32,15 @@ use svdlibrs::svd_dim;
 let svd = svd_dim(&csc, 3)?;
 ```
 ```rust
-use svdlibrs::svd_dim_from_seed;
+use svdlibrs::svd_dim_seed;
 
 /// svd on a sparse matrix requesting the dimension
 /// and supplying a fixed seed to the LAS2 algorithm
-let svd = svd_dim_from_seed(&csc, dimension, 12345)?;
+let svd = svd_dim_seed(&csc, dimension, 12345)?;
 ```
 # The above examples use svdLAS2 as shown below
 ```rust
-use svdlibrs::{svd, svd_dim, svd_dim_from_seed, svdLAS2, SvdRec};
+use svdlibrs::{svd, svd_dim, svd_dim_seed, svdLAS2, SvdRec};
 
 /// These are equivalent:
 let svd = svd(&csc)?;
@@ -52,7 +52,7 @@ let svd = svdLAS2(&csc, dimension, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)?;
 
 /// These are equivalent:
 let random_seed = 12345;
-let svd = svd_dim_from_seed(&csc, dimension, random_seed)?;
+let svd = svd_dim_seed(&csc, dimension, random_seed)?;
 let svd = svdLAS2(&csc, dimension, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)?;
 
 /// Parameter description
