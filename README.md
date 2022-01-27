@@ -120,7 +120,7 @@ ndarray = "0.15.4"
 extern crate ndarray;
 use ndarray::prelude::*;
 use nalgebra_sparse::{coo::CooMatrix, csc::CscMatrix};
-use svdlibrs::svd;
+use svdlibrs::svd_dim_seed;
 
 fn main() {
     let mut coo = CooMatrix::<f64>::new(3, 3);
@@ -129,7 +129,7 @@ fn main() {
     coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
 
     let csc = CscMatrix::from(&coo);
-    let svd = svd_from_seed(&csc,0,3141).unwrap();
+    let svd = svd_dim_seed(&csc, 0, 3141).unwrap();
     assert_eq!(svd.d, svd.ut.nrows());
     assert_eq!(svd.d, svd.s.dim());
     assert_eq!(svd.d, svd.vt.nrows());
