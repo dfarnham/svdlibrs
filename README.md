@@ -1,6 +1,6 @@
 # svdlibrs &emsp; [![Latest Version]][crates.io]
 
-[Latest Version]: https://img.shields.io/badge/crates.io-v0.3.0-blue
+[Latest Version]: https://img.shields.io/badge/crates.io-v0.4.0-blue
 [crates.io]: https://crates.io/crates/svdlibrs
 
 A library that computes an svd on a sparse matrix, typically a large sparse matrix 
