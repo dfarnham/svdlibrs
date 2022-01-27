@@ -111,7 +111,7 @@ $v
 • Cargo.toml dependencies
 ```text
 [dependencies]
-svdlibrs = "0.3.0"
+svdlibrs = "0.4.0"
 nalgebra-sparse = "0.6.0"
 ndarray = "0.15.4"
 ```
