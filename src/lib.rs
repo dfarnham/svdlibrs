@@ -4,7 +4,7 @@
 //!
 //! A Rust port of LAS2 from SVDLIBC
 //!
-//! This is a functional port (mostly a translation) of the algorithm as seen in Doug Rohde's SVDLIBC
+//! This is a functional port (mostly a translation) of the algorithm as implemented in Doug Rohde's SVDLIBC
 //!
 //! This library performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [CscMatrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/csc/struct.CscMatrix.html) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm) and returns the decomposition as [ndarray](https://docs.rs/ndarray/latest/ndarray/) components.
 //!
@@ -12,12 +12,16 @@
 //!
 //! Input: [CscMatrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/csc/struct.CscMatrix.html)
 //!
-//! Output: decomposition U,S,V where U,V are [Array2](https://docs.rs/ndarray/latest/ndarray/type.Array2.html) and S is [Array1](https://docs.rs/ndarray/latest/ndarray/type.Array1.html)
+//! Output: decomposition `U`,`S`,`V` where `U`,`V` are [`Array2`](https://docs.rs/ndarray/latest/ndarray/type.Array2.html) and `S` is [`Array1`](https://docs.rs/ndarray/latest/ndarray/type.Array1.html), packaged in a [Result](https://doc.rust-lang.org/stable/core/result/enum.Result.html)\<`SvdRec`, `SvdLibError`\>
 //!
-//! The above [ndarray](https://docs.rs/ndarray/latest/ndarray/) components along with the computed dimension and
-//! informational diagnostics are packaged as a Result
+//! # Quick Start
 //!
-//! # Example Library Usage
+//! ## There are 3 convenience methods to handle common use cases
+//! 1. `svd` -- simply computes an SVD
+//!
+//! 2. `svd_dim` -- computes an SVD supplying a desired numer of `dimensions`
+//!
+//! 3. `svd_dim_seed` -- computes an SVD supplying a desired numer of `dimensions` and a fixed `seed` to the LAS2 algorithm (the algorithm initializes with a random vector and will generate an internal seed if one isn't supplied)
 //!
 //! ```rust
 //! # extern crate ndarray;
@@ -29,10 +33,11 @@
 //! # coo.push(1, 1, -5.0);
 //!
 //! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-//! /// svd on a sparse matrix
+//! // SVD on a Compressed Sparse Column matrix
 //! let svd = svd(&csc)?;
 //! # Ok::<(), svdlibrs::error::SvdLibError>(())
 //! ```
+//!
 //! ```rust
 //! # extern crate ndarray;
 //! # use ndarray::prelude::*;
@@ -43,10 +48,11 @@
 //! # coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
 //!
 //! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-//! /// svd on a sparse matrix specifying a desired dimension, 3 in this example.
+//! // SVD on a Compressed Sparse Column matrix specifying the desired dimensions, 3 in this example
 //! let svd = svd_dim(&csc, 3)?;
 //! # Ok::<(), svdlibrs::error::SvdLibError>(())
 //! ```
+//!
 //! ```rust
 //! # extern crate ndarray;
 //! # use ndarray::prelude::*;
@@ -55,15 +61,45 @@
 //! # coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
 //! # coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
 //! # coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
-//! # let dimension = 3;
+//! # let dimensions = 3;
 //!
 //! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-//! /// svd on a sparse matrix requesting the dimension
-//! /// and supplying a fixed seed to the LAS2 algorithm
-//! let svd = svd_dim_seed(&csc, dimension, 12345)?;
+//! // SVD on a Compressed Sparse Column matrix requesting the
+//! // dimensions and supplying a fixed seed to the LAS2 algorithm
+//! let svd = svd_dim_seed(&csc, dimensions, 12345)?;
 //! # Ok::<(), svdlibrs::error::SvdLibError>(())
 //! ```
-//! # The above examples use svdLAS2 as shown below
+//!
+//! # The SVD Decomposition and informational Diagnostics are returned in `SvdRec`
+//!
+//! ```rust
+//! # extern crate ndarray;
+//! # use ndarray::prelude::*;
+//! pub struct SvdRec {
+//!     pub d: usize,        // Dimensionality (rank), the number of rows of both ut, vt and the length of s
+//!     pub ut: Array2<f64>, // Transpose of left singular vectors, the vectors are the rows of ut
+//!     pub s: Array1<f64>,  // Singular values (length d)
+//!     pub vt: Array2<f64>, // Transpose of right singular vectors, the vectors are the rows of vt
+//!     pub diagnostics: Diagnostics, // Computational diagnostics
+//! }
+//!
+//! pub struct Diagnostics {
+//!     pub non_zero: usize,   // Number of non-zeros in the input matrix
+//!     pub dimensions: usize, // Number of dimensions attempted (bounded by matrix shape)
+//!     pub iterations: usize, // Number of iterations attempted (bounded by dimensions and matrix shape)
+//!     pub transposed: bool,  // True if the matrix was transposed internally
+//!     pub lanczos_steps: usize,          // Number of Lanczos steps performed
+//!     pub ritz_values_stabilized: usize, // Number of ritz values
+//!     pub significant_values: usize,     // Number of significant values discovered
+//!     pub singular_values: usize,        // Number of singular values returned
+//!     pub end_interval: [f64; 2], // Left, Right end of interval containing unwanted eigenvalues
+//!     pub kappa: f64,             // Relative accuracy of ritz values acceptable as eigenvalues
+//!     pub random_seed: u32,       // Random seed provided or the seed generated
+//! }
+//! ```
+//!
+//! # The method `svdLAS2` provides the following parameter control
+//!
 //! ```rust
 //! # extern crate ndarray;
 //! # use ndarray::prelude::*;
@@ -72,37 +108,30 @@
 //! # coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
 //! # coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
 //! # coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
-//! # let dimension = 3;
-//!
 //! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-//! /// These are equivalent:
-//! let svd = svd(&csc)?;
-//! let svd = svdLAS2(&csc, 0, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)?;
+//! # let dimensions = 3;
+//! # let iterations = 0;
+//! # let end_interval = &[-1.0e-30, 1.0e-30];
+//! # let kappa = 1.0e-6;
+//! # let random_seed = 0;
 //!
-//! /// These are equivalent:
-//! let svd = svd_dim(&csc, dimension)?;
-//! let svd = svdLAS2(&csc, dimension, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)?;
-//!
-//! /// These are equivalent:
-//! let random_seed = 12345;
-//! let svd = svd_dim_seed(&csc, dimension, random_seed)?;
-//! let svd = svdLAS2(&csc, dimension, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)?;
-//!
-//! /// Parameter description
 //! let svd: SvdRec = svdLAS2(
-//!     &csc,                 // sparse matrix
-//!     0,                    // upper limit of desired number of singular triplets (0 = all)
-//!     0,                    // number of algorithm iterations (0 = smaller of csc rows or columns),
-//!                           // the upper limit of desired number of lanczos steps
-//!     &[-1.0e-30, 1.0e-30], // left, right end of interval containing unwanted eigenvalues,
-//!                           // typically small values centered around zero, e.g. [-1.0e-30, 1.0e-30]
-//!     1.0e-6,               // relative accuracy of ritz values acceptable as eigenvalues
-//!     0,                    // a supplied seed if > 0, otherwise an internal seed will be generated
+//!     &csc,         // sparse column matrix (nalgebra_sparse::csc::CscMatrix)
+//!     dimensions,   // upper limit of desired number of dimensions
+//!                   // supplying 0 will use the input matrix shape to determine dimensions
+//!     iterations,   // number of algorithm iterations
+//!                   // supplying 0 will use the input matrix shape to determine iterations
+//!     end_interval, // left, right end of interval containing unwanted eigenvalues,
+//!                   // typically small values centered around zero
+//!                   // set to [-1.0e-30, 1.0e-30] for convenience methods svd(), svd_dim(), svd_dim_seed()
+//!     kappa,        // relative accuracy of ritz values acceptable as eigenvalues
+//!                   // set to 1.0e-6 for convenience methods svd(), svd_dim(), svd_dim_seed()
+//!     random_seed,  // a supplied seed if > 0, otherwise an internal seed will be generated
 //! )?;
 //! # Ok::<(), svdlibrs::error::SvdLibError>(())
 //! ```
 //!
-//! # More SVD Examples
+//! # SVD Examples
 //!
 //! ### SVD using [R](https://www.r-project.org/)
 //!
@@ -145,19 +174,39 @@
 //! ```rust
 //! # extern crate ndarray;
 //! # use ndarray::prelude::*;
-//! use svdlibrs::svd_dim_seed;
 //! use nalgebra_sparse::{coo::CooMatrix, csc::CscMatrix};
+//! use svdlibrs::svd_dim_seed;
 //!
+//! // create a CscMatrix from a CooMatrix
+//! // use the same matrix values as the R example above
+//! //      [,1] [,2] [,3]
+//! // [1,]    1   16   49
+//! // [2,]    4   25   64
+//! // [3,]    9   36   81
 //! let mut coo = CooMatrix::<f64>::new(3, 3);
 //! coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
 //! coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
 //! coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
 //!
+//! // our input
 //! let csc = CscMatrix::from(&coo);
+//!
+//! // compute the svd
+//! // 1. supply 0 as the dimension (requesting max)
+//! // 2. supply a fixed seed so outputs are repeatable between runs
 //! let svd = svd_dim_seed(&csc, 0, 3141).unwrap();
+//!
+//! // svd.d dimensions were found by the algorithm
+//! // svd.ut is a 2-d array holding the left vectors
+//! // svd.vt is a 2-d array holding the right vectors
+//! // svd.s is a 1-d array holding the singular values
+//! // assert the shape of all results in terms of svd.d
+//! assert_eq!(svd.d, 3);
 //! assert_eq!(svd.d, svd.ut.nrows());
 //! assert_eq!(svd.d, svd.s.dim());
 //! assert_eq!(svd.d, svd.vt.nrows());
+//!
+//! // show transposed output
 //! println!("svd.d = {}\n", svd.d);
 //! println!("U =\n{:#?}\n", svd.ut.t());
 //! println!("S =\n{:#?}\n", svd.s);
@@ -165,20 +214,19 @@
 //!
 //! // Note: svd.ut & svd.vt are returned in transposed form
 //! // M = USV*
-//! let M = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
+//! let m_approx = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
 //!
+//! // assert computed values are an acceptable approximation
 //! let epsilon = 1.0e-12;
-//! assert_eq!(svd.d, 3);
-//!
-//! assert!((M[[0, 0]] - 1.0).abs() < epsilon);
-//! assert!((M[[0, 1]] - 16.0).abs() < epsilon);
-//! assert!((M[[0, 2]] - 49.0).abs() < epsilon);
-//! assert!((M[[1, 0]] - 4.0).abs() < epsilon);
-//! assert!((M[[1, 1]] - 25.0).abs() < epsilon);
-//! assert!((M[[1, 2]] - 64.0).abs() < epsilon);
-//! assert!((M[[2, 0]] - 9.0).abs() < epsilon);
-//! assert!((M[[2, 1]] - 36.0).abs() < epsilon);
-//! assert!((M[[2, 2]] - 81.0).abs() < epsilon);
+//! assert!((m_approx[[0, 0]] - 1.0).abs() < epsilon);
+//! assert!((m_approx[[0, 1]] - 16.0).abs() < epsilon);
+//! assert!((m_approx[[0, 2]] - 49.0).abs() < epsilon);
+//! assert!((m_approx[[1, 0]] - 4.0).abs() < epsilon);
+//! assert!((m_approx[[1, 1]] - 25.0).abs() < epsilon);
+//! assert!((m_approx[[1, 2]] - 64.0).abs() < epsilon);
+//! assert!((m_approx[[2, 0]] - 9.0).abs() < epsilon);
+//! assert!((m_approx[[2, 1]] - 36.0).abs() < epsilon);
+//! assert!((m_approx[[2, 2]] - 81.0).abs() < epsilon);
 //!
 //! assert!((svd.s[0] - 123.676578742544).abs() < epsilon);
 //! assert!((svd.s[1] - 6.084527896514).abs() < epsilon);
@@ -204,7 +252,7 @@
 //!  [-0.9238083467337805, -0.33460727276072516, -0.18605405537270261]], shape=[3, 3], strides=[1, 3], layout=Ff (0xa), const ndim=2
 //! ```
 //!
-//! # Result\<SvdRec\> for above example looks like this:
+//! # The full Result\<SvdRec\> for above example looks like this:
 //! ```text
 //! svd = Ok(
 //!     SvdRec {
@@ -225,6 +273,11 @@
 //!             ritz_values_stabilized: 3,
 //!             significant_values: 3,
 //!             singular_values: 3,
+//!             end_interval: [
+//!                 -1e-30,
+//!                 1e-30,
+//!             ],
+//!             kappa: 1e-6,
 //!             random_seed: 3141,
 //!         },
 //!     },
@@ -404,15 +457,17 @@ pub struct SvdRec {
 /// Computational Diagnostics
 ///
 /// # Fields
-/// - non_zero:  The number of non-zeros in the matrix
+/// - non_zero:  Number of non-zeros in the matrix
 /// - dimensions: Number of dimensions attempted (bounded by matrix shape)
 /// - iterations: Number of iterations attempted (bounded by dimensions and matrix shape)
 /// - transposed:  True if the matrix was transposed internally
-/// - lanczos_steps: The number of Lanczos steps performed
-/// - ritz_values_stabilized: The number of ritz values
-/// - significant_values: The number of significant values discovered
-/// - singular_values: The number of singular values returned
-/// - random_seed: The random seed provided or the seed generated
+/// - lanczos_steps: Number of Lanczos steps performed
+/// - ritz_values_stabilized: Number of ritz values
+/// - significant_values: Number of significant values discovered
+/// - singular_values: Number of singular values returned
+/// - end_interval: left, right end of interval containing unwanted eigenvalues
+/// - kappa: relative accuracy of ritz values acceptable as eigenvalues
+/// - random_seed: Random seed provided or the seed generated
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diagnostics {
     pub non_zero: usize,
@@ -423,42 +478,40 @@ pub struct Diagnostics {
     pub ritz_values_stabilized: usize,
     pub significant_values: usize,
     pub singular_values: usize,
+    pub end_interval: [f64; 2],
+    pub kappa: f64,
     pub random_seed: u32,
 }
 
-/// Compute a singular value decomposition at full dimensionality
-///   Convenience method, equivalent to:
-///   svdLAS2(csc, 0, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
+/// SVD at full dimensionality, calls `svdLAS2` with the highlighted defaults
+///
+/// svdLAS2(csc, `0`, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, `0`)
 ///
 /// # Parameters
-/// - csc: Compressed sparse column matrix
+/// - csc: Compressed Sparse Column matrix
 pub fn svd(csc: &CscMatrix<f64>) -> Result<SvdRec, SvdLibError> {
     svdLAS2(csc, 0, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
 }
 
-/// Compute a singular value decomposition at desired dimensionality
-///   Convenience method, equivalent to:
-///   svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
+/// SVD at desired dimensionality, calls `svdLAS2` with the highlighted defaults
+///
+/// svdLAS2(csc, dimensions, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, `0`)
 ///
 /// # Parameters
-/// - csc: Compressed sparse column matrix
-/// - dimensions: Upper limit of desired number of singular triplets (0 = max),
-///     where "max" is a value bounded by the matrix shape, the smaller of
-///     the csc matrix rows or columns. e.g. csc.nrows().min(csc.ncols())
+/// - csc: Compressed Sparse Column matrix
+/// - dimensions: Upper limit of desired number of dimensions, bounded by the matrix shape
 pub fn svd_dim(csc: &CscMatrix<f64>, dimensions: usize) -> Result<SvdRec, SvdLibError> {
     svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
 }
 
-/// Compute a singular value decomposition at desired dimensionality with supplied seed
-///   Convenience method, equivalent to:
-///   svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)
+/// SVD at desired dimensionality with supplied seed, calls `svdLAS2` with the highlighted defaults
+///
+/// svdLAS2(csc, dimensions, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, random_seed)
 ///
 /// # Parameters
-/// - csc: Compressed sparse column matrix
-/// - dimensions: Upper limit of desired number of singular triplets (0 = max),
-///     where "max" is a value bounded by the matrix shape, the smaller of
-///     the csc matrix rows or columns. e.g. csc.nrows().min(csc.ncols())
-/// - random_seed: A supplied seed if > 0, otherwise an internal seed will be generated
+/// - csc: Compressed Sparse Column matrix
+/// - dimensions: Upper limit of desired number of dimensions, bounded by the matrix shape
+/// - random_seed: A supplied seed `if > 0`, otherwise an internal seed will be generated
 pub fn svd_dim_seed(csc: &CscMatrix<f64>, dimensions: usize, random_seed: u32) -> Result<SvdRec, SvdLibError> {
     svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)
 }
@@ -468,24 +521,48 @@ pub fn svd_dim_seed(csc: &CscMatrix<f64>, dimensions: usize, random_seed: u32) -
 /// Compute a singular value decomposition
 ///
 /// # Parameters
-/// - csc: Compressed sparse column matrix
-/// - dimensions: Upper limit of desired number of singular triplets (0 = max),
+///
+/// - csc: Compressed Sparse Column matrix
+/// - dimensions: Upper limit of desired number of dimensions (0 = max),
 ///       where "max" is a value bounded by the matrix shape, the smaller of
-///       the csc matrix rows or columns. e.g. csc.nrows().min(csc.ncols())
+///       the matrix rows or columns. e.g. `csc.nrows().min(csc.ncols())`
 /// - iterations: Upper limit of desired number of lanczos steps (0 = max),
-///       iterations must be in range [dimensions, csc.nrows().min(csc.ncols())] and will be
-///       adjusted to the min/max range endpoint if supplied value is outside the range
-/// - end: Left, right end of interval containing unwanted eigenvalues,
-///       typically small values centered around zero, e.g. [-1.0e-30, 1.0e-30]
-/// - kappa: Relative accuracy of ritz values acceptable as eigenvalues
-/// - random_seed: A supplied seed if > 0, otherwise an internal seed will be generated
+///       where "max" is a value bounded by the matrix shape, the smaller of
+///       the matrix rows or columns. e.g. `csc.nrows().min(csc.ncols())`
+///       iterations must also be in range [`dimensions`, `csc.nrows().min(csc.ncols())`]
+/// - end_interval: Left, right end of interval containing unwanted eigenvalues,
+///       typically small values centered around zero, e.g. `[-1.0e-30, 1.0e-30]`
+/// - kappa: Relative accuracy of ritz values acceptable as eigenvalues, e.g. `1.0e-6`
+/// - random_seed: A supplied seed `if > 0`, otherwise an internal seed will be generated
+///
+/// # More on `dimensions`, `iterations` and `bounding` by the input matrix shape:
+///
+/// let `min_nrows_ncols` = `csc.nrows().min(csc.ncols())`; // The smaller of `rows`, `columns`
+///
+/// `dimensions` will be adjusted to `min_nrows_ncols` if `dimensions == 0` or `dimensions > min_nrows_ncols`
+///
+/// The algorithm begins with the following assertion on `dimensions`:
+///
+/// #### assert!(dimensions > 1 && dimensions <= min_nrows_ncols);
+///
+/// ---
+///
+/// `iterations` will be adjusted to `min_nrows_ncols` if `iterations == 0` or `iterations > min_nrows_ncols`
+///
+/// `iterations` will be adjusted to `dimensions` if `iterations < dimensions`
+///
+/// The algorithm begins with the following assertion on `iterations`:
+///
+/// #### assert!(iterations >= dimensions && iterations <= min_nrows_ncols);
+///
 /// # Returns
-/// SvdRec struct containing the decomposition
+///
+/// Ok(`SvdRec`) on successful decomposition
 pub fn svdLAS2(
     csc: &CscMatrix<f64>,
     dimensions: usize,
     iterations: usize,
-    end: &[f64; 2],
+    end_interval: &[f64; 2],
     kappa: f64,
     random_seed: u32,
 ) -> Result<SvdRec, SvdLibError> {
@@ -494,15 +571,15 @@ pub fn svdLAS2(
         false => thread_rng().gen::<_>(),
     };
 
-    let matrix_min_dim = csc.nrows().min(csc.ncols());
+    let min_nrows_ncols = csc.nrows().min(csc.ncols());
 
     let dimensions = match dimensions {
-        n if n == 0 || n > matrix_min_dim => matrix_min_dim,
+        n if n == 0 || n > min_nrows_ncols => min_nrows_ncols,
         _ => dimensions,
     };
 
     let iterations = match iterations {
-        n if n == 0 || n > matrix_min_dim => matrix_min_dim,
+        n if n == 0 || n > min_nrows_ncols => min_nrows_ncols,
         n if n < dimensions => dimensions,
         _ => iterations,
     };
@@ -513,8 +590,8 @@ pub fn svdLAS2(
         )));
     }
 
-    assert!(dimensions > 1 && dimensions <= matrix_min_dim);
-    assert!(iterations >= dimensions && iterations <= matrix_min_dim);
+    assert!(dimensions > 1 && dimensions <= min_nrows_ncols);
+    assert!(iterations >= dimensions && iterations <= min_nrows_ncols);
 
     // If the matrix is wide, the SVD is computed on its transpose for speed
     let transpose = csc.ncols() as f64 >= (csc.nrows() as f64 * 1.2);
@@ -536,7 +613,7 @@ pub fn svdLAS2(
         A,
         dimensions,
         iterations,
-        end,
+        end_interval,
         &mut wrk,
         &mut neig,
         &mut store,
@@ -567,6 +644,8 @@ pub fn svdLAS2(
             ritz_values_stabilized: neig,
             significant_values: R.d,
             singular_values: R.nsig,
+            end_interval: *end_interval,
+            kappa: kappa,
             random_seed: random_seed,
         },
     })
@@ -1884,14 +1963,13 @@ fn lanso(
     A: &CscMatrix<f64>,
     dim: usize,
     iterations: usize,
-    end: &[f64; 2],
+    end_interval: &[f64; 2],
     wrk: &mut WorkSpace,
     neig: &mut usize,
     store: &mut Store,
     random_seed: u32,
 ) -> Result<usize, SvdLibError> {
-    let endl = end[0];
-    let endr = end[1];
+    let (endl, endr) = (end_interval[0], end_interval[1]);
 
     /* take the first step */
     let rnm_tol = stpone(A, wrk, store, random_seed)?;
