@@ -48,7 +48,7 @@ use svdlibrs::svd_dim_seed;
 let svd = svd_dim_seed(&csc, dimensions, 12345)?;
 ```
 
-# The SVD Decomposition and informational Diagnostics are returned in `SvdRec`
+# The SVD and informational Diagnostics are returned in `SvdRec`
 
 ```rust
 pub struct SvdRec {
