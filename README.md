@@ -225,7 +225,7 @@ V =
  [-0.9238083467337805, -0.33460727276072516, -0.18605405537270261]], shape=[3, 3], strides=[1, 3], layout=Ff (0xa), const ndim=2
 ```
 
-### the full Result\<SvdRec\> for above example looks like this:
+### The full Result\<SvdRec\> for above example looks like this:
 
 ```text
 svd = Ok(
