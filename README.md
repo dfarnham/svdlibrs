@@ -48,7 +48,7 @@ use svdlibrs::svd_dim_seed;
 let svd = svd_dim_seed(&csc, dimensions, 12345)?;
 ```
 
-# The SVD and informational Diagnostics are returned in `SvdRec`
+## The SVD and informational Diagnostics are returned in `SvdRec`
 
 ```rust
 pub struct SvdRec {
@@ -74,7 +74,7 @@ pub struct Diagnostics {
 }
 ```
 
-# The method `svdLAS2` provides the following parameter control
+## The method `svdLAS2` provides the following parameter control
 
 ```rust
 use svdlibrs::{svd, svd_dim, svd_dim_seed, svdLAS2, SvdRec};
@@ -94,7 +94,7 @@ let svd: SvdRec = svdLAS2(
 )?;
 ```
 
-# SVD Examples
+## SVD Examples
 
 ### SVD using [R](https://www.r-project.org/)
 
