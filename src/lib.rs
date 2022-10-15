@@ -947,9 +947,7 @@ fn svd_dscal(d: f64, x: &mut [f64]) {
 
 // copies a vector x to a vector y (reversed direction)
 fn svd_dcopy(n: usize, offset: usize, x: &[f64], y: &mut [f64]) {
-    assert!(n > 0, "svd_dcopy: unexpected inputs!");
-
-    let start = n - 1;
+    let start = core::cmp::max(n - 1, 0);
     for i in 0..n {
         y[offset + start - i] = x[offset + i];
     }
