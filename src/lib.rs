@@ -947,11 +947,11 @@ fn svd_dscal(d: f64, x: &mut [f64]) {
 
 // copies a vector x to a vector y (reversed direction)
 fn svd_dcopy(n: usize, offset: usize, x: &[f64], y: &mut [f64]) {
-    assert!(n > 0, "svd_dcopy: unexpected inputs!");
-
-    let start = n - 1;
-    for i in 0..n {
-        y[offset + start - i] = x[offset + i];
+    if n > 0 {
+        let start = n - 1;
+        for i in 0..n {
+            y[offset + start - i] = x[offset + i];
+        }
     }
 }
 
@@ -2089,4 +2089,27 @@ mod tests {
         assert!((svd.s[0] - 6.3245553203368).abs() < epsilon);
         assert!((svd.s[1] - 3.1622776601684).abs() < epsilon);
     }
+
+    #[test]
+    #[rustfmt::skip]
+    fn identity_3x3() {
+        // [ [ 1, 0, 0 ],
+        //   [ 0, 1, 0 ],
+        //   [ 0, 0, 1 ] ]
+        let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
+        coo.push(0, 0, 1.0);
+        coo.push(1, 1, 1.0);
+        coo.push(2, 2, 1.0);
+
+        let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
+        let svd = svd(&csc).unwrap();
+        assert_eq!(svd.d, svd.ut.nrows());
+        assert_eq!(svd.d, svd.s.dim());
+        assert_eq!(svd.d, svd.vt.nrows());
+
+        let epsilon = 1.0e-12;
+        assert_eq!(svd.d, 1);
+        assert!((svd.s[0] - 1.0).abs() < epsilon);
+    }
+
 }
