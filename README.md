@@ -1,6 +1,6 @@
 # svdlibrs &emsp; [![Latest Version]][crates.io]
 
-[Latest Version]: https://img.shields.io/badge/crates.io-v0.4.2-blue
+[Latest Version]: https://img.shields.io/badge/crates.io-v0.4.3-blue
 [crates.io]: https://crates.io/crates/svdlibrs
 
 A library that computes an svd on a sparse matrix, typically a large sparse matrix
@@ -137,9 +137,9 @@ $v
 • Cargo.toml dependencies
 ```text
 [dependencies]
-svdlibrs = "0.4.2"
-nalgebra-sparse = "0.6.0"
-ndarray = "0.15.4"
+svdlibrs = "0.4.3"
+nalgebra-sparse = "0.7.1"
+ndarray = "0.15.6"
 ```
 
 ```rust
