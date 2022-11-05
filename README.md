@@ -3,9 +3,9 @@
 [Latest Version]: https://img.shields.io/badge/crates.io-v0.4.3-blue
 [crates.io]: https://crates.io/crates/svdlibrs
 
-A library that computes an svd on a sparse matrix, typically a large sparse matrix
-
 A Rust port of LAS2 from SVDLIBC
+
+A library that computes an svd on a sparse matrix, typically a large sparse matrix
 
 This is a functional port (mostly a translation) of the algorithm as implemented in Doug Rohde's SVDLIBC
 
