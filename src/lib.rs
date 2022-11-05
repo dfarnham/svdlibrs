@@ -1,8 +1,8 @@
 //! # svdlibrs
 //!
-//! A library that computes an svd on a sparse matrix, typically a large sparse matrix
-//!
 //! A Rust port of LAS2 from SVDLIBC
+//!
+//! A library that computes an svd on a sparse matrix, typically a large sparse matrix
 //!
 //! This is a functional port (mostly a translation) of the algorithm as implemented in Doug Rohde's SVDLIBC
 //!
