@@ -424,7 +424,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ***********************************************************************/
 
-use nalgebra_sparse::csc::CscMatrix;
 use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
 use std::mem;
 extern crate ndarray;
@@ -436,6 +435,14 @@ use error::SvdLibError;
 // ====================
 //        Public
 // ====================
+
+/// Sparse matrix
+pub trait SMat {
+    fn nrows(&self) -> usize;
+    fn ncols(&self) -> usize;
+    fn nnz(&self) -> usize;
+    fn svd_opa(&self, x: &[f64], y: &mut [f64], transposed: bool); // y = A*x
+}
 
 /// Singular Value Decomposition Components
 ///
@@ -483,37 +490,40 @@ pub struct Diagnostics {
     pub random_seed: u32,
 }
 
+#[allow(non_snake_case)]
 /// SVD at full dimensionality, calls `svdLAS2` with the highlighted defaults
 ///
-/// svdLAS2(csc, `0`, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, `0`)
+/// svdLAS2(A, `0`, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, `0`)
 ///
 /// # Parameters
-/// - csc: Compressed Sparse Column matrix
-pub fn svd(csc: &CscMatrix<f64>) -> Result<SvdRec, SvdLibError> {
-    svdLAS2(csc, 0, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
+/// - A: Sparse matrix
+pub fn svd(A: &dyn SMat) -> Result<SvdRec, SvdLibError> {
+    svdLAS2(A, 0, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
 }
 
+#[allow(non_snake_case)]
 /// SVD at desired dimensionality, calls `svdLAS2` with the highlighted defaults
 ///
-/// svdLAS2(csc, dimensions, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, `0`)
+/// svdLAS2(A, dimensions, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, `0`)
 ///
 /// # Parameters
-/// - csc: Compressed Sparse Column matrix
+/// - A: Sparse matrix
 /// - dimensions: Upper limit of desired number of dimensions, bounded by the matrix shape
-pub fn svd_dim(csc: &CscMatrix<f64>, dimensions: usize) -> Result<SvdRec, SvdLibError> {
-    svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
+pub fn svd_dim(A: &dyn SMat, dimensions: usize) -> Result<SvdRec, SvdLibError> {
+    svdLAS2(A, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, 0)
 }
 
+#[allow(non_snake_case)]
 /// SVD at desired dimensionality with supplied seed, calls `svdLAS2` with the highlighted defaults
 ///
-/// svdLAS2(csc, dimensions, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, random_seed)
+/// svdLAS2(A, dimensions, `0`, `&[-1.0e-30, 1.0e-30]`, `1.0e-6`, random_seed)
 ///
 /// # Parameters
-/// - csc: Compressed Sparse Column matrix
+/// - A: Sparse matrix
 /// - dimensions: Upper limit of desired number of dimensions, bounded by the matrix shape
 /// - random_seed: A supplied seed `if > 0`, otherwise an internal seed will be generated
-pub fn svd_dim_seed(csc: &CscMatrix<f64>, dimensions: usize, random_seed: u32) -> Result<SvdRec, SvdLibError> {
-    svdLAS2(csc, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)
+pub fn svd_dim_seed(A: &dyn SMat, dimensions: usize, random_seed: u32) -> Result<SvdRec, SvdLibError> {
+    svdLAS2(A, dimensions, 0, &[-1.0e-30, 1.0e-30], 1.0e-6, random_seed)
 }
 
 #[allow(clippy::redundant_field_names)]
@@ -522,14 +532,14 @@ pub fn svd_dim_seed(csc: &CscMatrix<f64>, dimensions: usize, random_seed: u32) -
 ///
 /// # Parameters
 ///
-/// - csc: Compressed Sparse Column matrix
+/// - A: Sparse matrix
 /// - dimensions: Upper limit of desired number of dimensions (0 = max),
 ///       where "max" is a value bounded by the matrix shape, the smaller of
-///       the matrix rows or columns. e.g. `csc.nrows().min(csc.ncols())`
+///       the matrix rows or columns. e.g. `A.nrows().min(A.ncols())`
 /// - iterations: Upper limit of desired number of lanczos steps (0 = max),
 ///       where "max" is a value bounded by the matrix shape, the smaller of
-///       the matrix rows or columns. e.g. `csc.nrows().min(csc.ncols())`
-///       iterations must also be in range [`dimensions`, `csc.nrows().min(csc.ncols())`]
+///       the matrix rows or columns. e.g. `A.nrows().min(A.ncols())`
+///       iterations must also be in range [`dimensions`, `A.nrows().min(A.ncols())`]
 /// - end_interval: Left, right end of interval containing unwanted eigenvalues,
 ///       typically small values centered around zero, e.g. `[-1.0e-30, 1.0e-30]`
 /// - kappa: Relative accuracy of ritz values acceptable as eigenvalues, e.g. `1.0e-6`
@@ -537,7 +547,7 @@ pub fn svd_dim_seed(csc: &CscMatrix<f64>, dimensions: usize, random_seed: u32) -
 ///
 /// # More on `dimensions`, `iterations` and `bounding` by the input matrix shape:
 ///
-/// let `min_nrows_ncols` = `csc.nrows().min(csc.ncols())`; // The smaller of `rows`, `columns`
+/// let `min_nrows_ncols` = `A.nrows().min(A.ncols())`; // The smaller of `rows`, `columns`
 ///
 /// `dimensions` will be adjusted to `min_nrows_ncols` if `dimensions == 0` or `dimensions > min_nrows_ncols`
 ///
@@ -559,7 +569,7 @@ pub fn svd_dim_seed(csc: &CscMatrix<f64>, dimensions: usize, random_seed: u32) -
 ///
 /// Ok(`SvdRec`) on successful decomposition
 pub fn svdLAS2(
-    csc: &CscMatrix<f64>,
+    A: &dyn SMat,
     dimensions: usize,
     iterations: usize,
     end_interval: &[f64; 2],
@@ -571,7 +581,7 @@ pub fn svdLAS2(
         false => thread_rng().gen::<_>(),
     };
 
-    let min_nrows_ncols = csc.nrows().min(csc.ncols());
+    let min_nrows_ncols = A.nrows().min(A.ncols());
 
     let dimensions = match dimensions {
         n if n == 0 || n > min_nrows_ncols => min_nrows_ncols,
@@ -594,18 +604,12 @@ pub fn svdLAS2(
     assert!(iterations >= dimensions && iterations <= min_nrows_ncols);
 
     // If the matrix is wide, the SVD is computed on its transpose for speed
-    let transpose = csc.ncols() as f64 >= (csc.nrows() as f64 * 1.2);
-    let tm: CscMatrix<f64>;
-    let A = match transpose {
-        true => {
-            tm = csc.transpose();
-            &tm
-        }
-        false => csc,
-    };
+    let transposed = A.ncols() as f64 >= (A.nrows() as f64 * 1.2);
+    let nrows = if transposed { A.ncols() } else { A.nrows() };
+    let ncols = if transposed { A.nrows() } else { A.ncols() };
 
-    let mut wrk = WorkSpace::new(A.ncols(), iterations)?;
-    let mut store = Store::new(A.ncols())?;
+    let mut wrk = WorkSpace::new(nrows, ncols, transposed, iterations)?;
+    let mut store = Store::new(ncols)?;
 
     // Actually run the lanczos thing
     let mut neig = 0;
@@ -625,7 +629,7 @@ pub fn svdLAS2(
     let mut R = ritvec(A, dimensions, kappa, &mut wrk, steps, neig, &mut store)?;
 
     // This swaps and transposes the singular matrices if A was transposed.
-    if transpose {
+    if transposed {
         mem::swap(&mut R.Ut, &mut R.Vt);
     }
 
@@ -639,7 +643,7 @@ pub fn svdLAS2(
             non_zero: A.nnz(),
             dimensions: dimensions,
             iterations: iterations,
-            transposed: transpose,
+            transposed: transposed,
             lanczos_steps: steps + 1,
             ritz_values_stabilized: neig,
             significant_values: R.d,
@@ -733,6 +737,9 @@ impl Store {
 }
 
 struct WorkSpace {
+    nrows: usize,
+    ncols: usize,
+    transposed: bool,
     w0: Vec<f64>,     // workspace 0
     w1: Vec<f64>,     // workspace 1
     w2: Vec<f64>,     // workspace 2
@@ -745,22 +752,27 @@ struct WorkSpace {
     bet: Vec<f64>,    // array to hold off-diagonal of T
     bnd: Vec<f64>,    // array to hold the error bounds
     ritz: Vec<f64>,   // array to hold the ritz values
+    temp: Vec<f64>,   // array to hold the temp values
 }
 impl WorkSpace {
-    fn new(n: usize, m: usize) -> Result<Self, SvdLibError> {
+    fn new(nrows: usize, ncols: usize, transposed: bool, iterations: usize) -> Result<Self, SvdLibError> {
         Ok(Self {
-            w0: vec![0.0; n],
-            w1: vec![0.0; n],
-            w2: vec![0.0; n],
-            w3: vec![0.0; n],
-            w4: vec![0.0; n],
-            w5: vec![0.0; n],
-            alf: vec![0.0; m],
-            eta: vec![0.0; m],
-            oldeta: vec![0.0; m],
-            bet: vec![0.0; 1 + m],
-            ritz: vec![0.0; 1 + m],
-            bnd: vec![f64::MAX; 1 + m],
+            nrows: nrows,
+            ncols: ncols,
+            transposed: transposed,
+            w0: vec![0.0; ncols],
+            w1: vec![0.0; ncols],
+            w2: vec![0.0; ncols],
+            w3: vec![0.0; ncols],
+            w4: vec![0.0; ncols],
+            w5: vec![0.0; ncols],
+            alf: vec![0.0; iterations],
+            eta: vec![0.0; iterations],
+            oldeta: vec![0.0; iterations],
+            bet: vec![0.0; 1 + iterations],
+            ritz: vec![0.0; 1 + iterations],
+            bnd: vec![f64::MAX; 1 + iterations],
+            temp: vec![0.0; nrows],
         })
     }
 }
@@ -812,60 +824,14 @@ fn insert_sort<T: PartialOrd>(n: usize, array1: &mut [T], array2: &mut [T]) {
 }
 
 #[allow(non_snake_case)]
-// takes an n-vector x and returns A*x in y
-fn svd_opa(A: &CscMatrix<f64>, x: &[f64], y: &mut [f64]) {
-    assert_eq!(
-        x.len(),
-        A.ncols(),
-        "svd_opa: x must be A.ncols() in length, x = {}, A.ncols = {}",
-        x.len(),
-        A.ncols()
-    );
-    assert_eq!(
-        y.len(),
-        A.nrows(),
-        "svd_opa: y must be A.nrows() in length, y = {}, A.nrows = {}",
-        y.len(),
-        A.nrows()
-    );
-    let (col_offsets, row_indices, values) = A.csc_data();
-
-    y.fill(0.0);
-    for (i, xval) in x.iter().enumerate() {
-        for j in col_offsets[i]..col_offsets[i + 1] {
-            y[row_indices[j]] += values[j] * xval;
-        }
-    }
-}
-
-#[allow(non_snake_case)]
-// takes an n-vector x and returns B*x in y
-fn svd_opb(A: &CscMatrix<f64>, x: &[f64], y: &mut [f64]) {
-    assert_eq!(
-        x.len(),
-        A.ncols(),
-        "svd_opb: x must be A.ncols() in length, x = {}, A.ncols = {}",
-        x.len(),
-        A.ncols()
-    );
-    assert_eq!(
-        y.len(),
-        A.ncols(),
-        "svd_opb: y must be A.ncols() in length, y = {}, A.ncols = {}",
-        y.len(),
-        A.ncols()
-    );
-    let (col_offsets, row_indices, values) = A.csc_data();
-
-    let mut atx = vec![0.0; A.nrows()];
-    svd_opa(A, x, &mut atx);
-
-    y.fill(0.0);
-    for (i, yval) in y.iter_mut().enumerate() {
-        for j in col_offsets[i]..col_offsets[i + 1] {
-            *yval += values[j] * atx[row_indices[j]];
-        }
-    }
+fn svd_opb(A: &dyn SMat, x: &[f64], y: &mut [f64], temp: &mut [f64], transposed: bool) {
+    let nrows = if transposed { A.ncols() } else { A.nrows() };
+    let ncols = if transposed { A.nrows() } else { A.ncols() };
+    assert_eq!(x.len(), ncols, "svd_opb: x must be A.ncols() in length, x = {}, A.ncols = {}", x.len(), ncols);
+    assert_eq!(y.len(), ncols, "svd_opb: y must be A.ncols() in length, y = {}, A.ncols = {}", y.len(), ncols);
+    assert_eq!(temp.len(), nrows, "svd_opa: temp must be A.nrows() in length, temp = {}, A.nrows = {}", temp.len(), nrows);
+    A.svd_opa(x, temp, transposed); // temp = (A * x)
+    A.svd_opa(temp, y, !transposed);  // y = A' * (A * x) = A' * temp
 }
 
 // constant times a vector plus a vector
@@ -1128,7 +1094,7 @@ fn imtqlb(n: usize, d: &mut [f64], e: &mut [f64], bnd: &mut [f64]) -> Result<(),
 ***********************************************************************/
 #[allow(non_snake_case)]
 fn startv(
-    A: &CscMatrix<f64>,
+    A: &dyn SMat,
     wrk: &mut WorkSpace,
     step: usize,
     store: &mut Store,
@@ -1148,7 +1114,7 @@ fn startv(
         wrk.w3.copy_from_slice(&wrk.w0);
 
         // apply operator to put r in range (essential if m singular)
-        svd_opb(A, &wrk.w3, &mut wrk.w0);
+        svd_opb(A, &wrk.w3, &mut wrk.w0, &mut wrk.temp, wrk.transposed);
         wrk.w3.copy_from_slice(&wrk.w0);
         rnm2 = svd_ddot(&wrk.w3, &wrk.w3);
         if rnm2 > 0.0 {
@@ -1209,7 +1175,7 @@ fn startv(
 ***********************************************************************/
 #[allow(non_snake_case)]
 fn stpone(
-    A: &CscMatrix<f64>,
+    A: &dyn SMat,
     wrk: &mut WorkSpace,
     store: &mut Store,
     random_seed: u32,
@@ -1225,7 +1191,7 @@ fn stpone(
     svd_dscal(rnm.recip(), &mut wrk.w3);
 
     // take the first step
-    svd_opb(A, &wrk.w3, &mut wrk.w0);
+    svd_opb(A, &wrk.w3, &mut wrk.w0, &mut wrk.temp, wrk.transposed);
     wrk.alf[0] = svd_ddot(&wrk.w0, &wrk.w3);
     svd_daxpy(-wrk.alf[0], &wrk.w1, &mut wrk.w0);
     let t = svd_ddot(&wrk.w0, &wrk.w3);
@@ -1268,7 +1234,7 @@ fn stpone(
 #[allow(non_snake_case)]
 #[allow(clippy::too_many_arguments)]
 fn lanczos_step(
-    A: &CscMatrix<f64>,
+    A: &dyn SMat,
     wrk: &mut WorkSpace,
     first: usize,
     last: usize,
@@ -1278,7 +1244,7 @@ fn lanczos_step(
     tol: &mut f64,
     store: &mut Store,
 ) -> Result<usize, SvdLibError> {
-    let eps1 = f64::EPSILON * (A.ncols() as f64).sqrt();
+    let eps1 = f64::EPSILON * (wrk.ncols as f64).sqrt();
     let mut j = first;
 
     while j < last {
@@ -1310,7 +1276,7 @@ fn lanczos_step(
         // take a lanczos step
         svd_datx(rnm.recip(), &wrk.w0, &mut wrk.w1);
         svd_dscal(rnm.recip(), &mut wrk.w3);
-        svd_opb(A, &wrk.w3, &mut wrk.w0);
+        svd_opb(A, &wrk.w3, &mut wrk.w0, &mut wrk.temp, wrk.transposed);
         svd_daxpy(-*rnm, &wrk.w2, &mut wrk.w0);
         wrk.alf[j] = svd_ddot(&wrk.w0, &wrk.w3);
         svd_daxpy(-wrk.alf[j], &wrk.w1, &mut wrk.w0);
@@ -1346,7 +1312,7 @@ fn lanczos_step(
         ortbnd(wrk, j, *rnm, eps1);
 
         // restore the orthogonality state when needed
-        purge(A.ncols(), *ll, wrk, j, rnm, *tol, store);
+        purge(wrk.ncols, *ll, wrk, j, rnm, *tol, store);
         if *rnm <= *tol {
             *rnm = 0.0;
         }
@@ -1802,7 +1768,7 @@ fn rotate_array(a: &mut [f64], x: usize) {
 ***********************************************************************/
 #[allow(non_snake_case)]
 fn ritvec(
-    A: &CscMatrix<f64>,
+    A: &dyn SMat,
     dimensions: usize,
     kappa: f64,
     wrk: &mut WorkSpace,
@@ -1820,8 +1786,8 @@ fn ritvec(
     }
 
     let mut Vt = DMat {
-        cols: A.ncols(),
-        value: vec![0.0; A.ncols() * dimensions],
+        cols: wrk.ncols,
+        value: vec![0.0; wrk.ncols * dimensions],
     };
 
     svd_dcopy(js, 0, &wrk.alf, &mut Vt.value);
@@ -1867,8 +1833,8 @@ fn ritvec(
     let d = dimensions.min(nsig);
     let mut S = vec![0.0; d];
     let mut Ut = DMat {
-        cols: A.nrows(),
-        value: vec![0.0; A.nrows() * d],
+        cols: wrk.nrows,
+        value: vec![0.0; wrk.nrows * d],
     };
     Vt.value.resize(Vt.cols * d, 0.0);
 
@@ -1881,7 +1847,7 @@ fn ritvec(
         let ut_vec = &mut Ut.value[ut_offset..ut_offset + Ut.cols];
 
         // multiply by matrix B first
-        svd_opb(A, vt_vec, &mut tmp_vec);
+        svd_opb(A, vt_vec, &mut tmp_vec, &mut wrk.temp, wrk.transposed);
         let t = svd_ddot(vt_vec, &tmp_vec);
 
         // store the Singular Value at S[i]
@@ -1891,7 +1857,7 @@ fn ritvec(
         wrk.bnd[js] = svd_norm(&tmp_vec) * sval.recip();
 
         // multiply by matrix A to get (scaled) left s-vector
-        svd_opa(A, vt_vec, ut_vec);
+        A.svd_opa(vt_vec, ut_vec, wrk.transposed);
         svd_dscal(sval.recip(), ut_vec);
     }
 
@@ -1960,7 +1926,7 @@ fn ritvec(
 #[allow(non_snake_case)]
 #[allow(clippy::too_many_arguments)]
 fn lanso(
-    A: &CscMatrix<f64>,
+    A: &dyn SMat,
     dim: usize,
     iterations: usize,
     end_interval: &[f64; 2],
@@ -1976,7 +1942,7 @@ fn lanso(
     let mut rnm = rnm_tol.0;
     let mut tol = rnm_tol.1;
 
-    let eps1 = f64::EPSILON * (A.ncols() as f64).sqrt();
+    let eps1 = f64::EPSILON * (wrk.ncols as f64).sqrt();
     wrk.eta[0] = eps1;
     wrk.oldeta[0] = eps1;
     let mut ll = 0;
@@ -2052,6 +2018,120 @@ fn lanso(
     store.storq(j, &wrk.w1);
     Ok(j)
 }
+
+//////////////////////////////////////////
+// SvdRec implementation
+//////////////////////////////////////////
+
+impl SvdRec {
+    pub fn recompose(&self) -> Array2<f64> {
+        let sdiag = Array2::from_diag(&self.s);
+        self.ut.t().dot(&sdiag).dot(&self.vt)
+    }
+}
+
+//////////////////////////////////////////
+// SMat implementation for CscMatrix
+//////////////////////////////////////////
+
+impl SMat for nalgebra_sparse::csc::CscMatrix<f64> {
+    fn nrows(&self) -> usize { self.nrows() }
+    fn ncols(&self) -> usize { self.ncols() }
+    fn nnz(&self) -> usize { self.nnz() }
+
+    /// takes an n-vector x and returns A*x in y
+    fn svd_opa(&self, x: &[f64], y: &mut [f64], transposed: bool) {
+        let nrows = if transposed { self.ncols() } else { self.nrows() };
+        let ncols = if transposed { self.nrows() } else { self.ncols() };
+        assert_eq!(x.len(), ncols, "svd_opa: x must be A.ncols() in length, x = {}, A.ncols = {}", x.len(), ncols);
+        assert_eq!(y.len(), nrows, "svd_opa: y must be A.nrows() in length, y = {}, A.nrows = {}", y.len(), nrows);
+
+        let (major_offsets, minor_indices, values) = self.csc_data();
+
+        y.fill(0.0);
+        if transposed {
+            for (i, yval) in y.iter_mut().enumerate() {
+                for j in major_offsets[i]..major_offsets[i + 1] {
+                    *yval += values[j] * x[minor_indices[j]];
+                }
+            }
+        } else {
+            for (i, xval) in x.iter().enumerate() {
+                for j in major_offsets[i]..major_offsets[i + 1] {
+                    y[minor_indices[j]] += values[j] * xval;
+                }
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////
+// SMat implementation for CsrMatrix
+//////////////////////////////////////////
+
+impl SMat for nalgebra_sparse::csr::CsrMatrix<f64> {
+    fn nrows(&self) -> usize { self.nrows() }
+    fn ncols(&self) -> usize { self.ncols() }
+    fn nnz(&self) -> usize { self.nnz() }
+
+    /// takes an n-vector x and returns A*x in y
+    fn svd_opa(&self, x: &[f64], y: &mut [f64], transposed: bool) {
+        let nrows = if transposed { self.ncols() } else { self.nrows() };
+        let ncols = if transposed { self.nrows() } else { self.ncols() };
+        assert_eq!(x.len(), ncols, "svd_opa: x must be A.ncols() in length, x = {}, A.ncols = {}", x.len(), ncols);
+        assert_eq!(y.len(), nrows, "svd_opa: y must be A.nrows() in length, y = {}, A.nrows = {}", y.len(), nrows);
+
+        let (major_offsets, minor_indices, values) = self.csr_data();
+
+        y.fill(0.0);
+        if !transposed {
+            for (i, yval) in y.iter_mut().enumerate() {
+                for j in major_offsets[i]..major_offsets[i + 1] {
+                    *yval += values[j] * x[minor_indices[j]];
+                }
+            }
+        } else {
+            for (i, xval) in x.iter().enumerate() {
+                for j in major_offsets[i]..major_offsets[i + 1] {
+                    y[minor_indices[j]] += values[j] * xval;
+                }
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////
+// SMat implementation for CooMatrix
+//////////////////////////////////////////
+
+impl SMat for nalgebra_sparse::coo::CooMatrix<f64> {
+    fn nrows(&self) -> usize { self.nrows() }
+    fn ncols(&self) -> usize { self.ncols() }
+    fn nnz(&self) -> usize { self.nnz() }
+
+    /// takes an n-vector x and returns A*x in y
+    fn svd_opa(&self, x: &[f64], y: &mut [f64], transposed: bool) {
+        let nrows = if transposed { self.ncols() } else { self.nrows() };
+        let ncols = if transposed { self.nrows() } else { self.ncols() };
+        assert_eq!(x.len(), ncols, "svd_opa: x must be A.ncols() in length, x = {}, A.ncols = {}", x.len(), ncols);
+        assert_eq!(y.len(), nrows, "svd_opa: y must be A.nrows() in length, y = {}, A.nrows = {}", y.len(), nrows);
+
+        y.fill(0.0);
+        if transposed {
+            for (i, j, v) in self.triplet_iter() {
+                y[j] += v * x[i];
+            }
+        } else {
+            for (i, j, v) in self.triplet_iter() {
+                y[i] += v * x[j];
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////
+// Tests
+//////////////////////////////////////////
 
 #[cfg(test)]
 mod tests {

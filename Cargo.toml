@@ -11,7 +11,7 @@ readme = "README.md"
 edition = "2021"
 
 [dependencies]
-nalgebra-sparse = "0.7.1"
+nalgebra-sparse = "0.8.0"
 ndarray = "0.15.6"
 rand = "0.8.5"
 thiserror = "1.0.37"
