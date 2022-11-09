@@ -187,6 +187,7 @@ fn main() {
     // Note: svd.ut & svd.vt are returned in transposed form
     // M = USV*
     let m_approx = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
+    assert_eq!(svd.recompose(), m_approx);
 
     // assert computed values are an acceptable approximation
     let epsilon = 1.0e-12;
