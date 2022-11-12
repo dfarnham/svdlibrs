@@ -1,6 +1,6 @@
 # svdlibrs &emsp; [![Latest Version]][crates.io]
 
-[Latest Version]: https://img.shields.io/badge/crates.io-v0.4.3-blue
+[Latest Version]: https://img.shields.io/badge/crates.io-v0.5.0-blue
 [crates.io]: https://crates.io/crates/svdlibrs
 
 A Rust port of LAS2 from SVDLIBC
@@ -9,11 +9,11 @@ A library that computes an svd on a sparse matrix, typically a large sparse matr
 
 This is a functional port (mostly a translation) of the algorithm as implemented in Doug Rohde's SVDLIBC
 
-This library performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [CscMatrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/csc/struct.CscMatrix.html) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm) and returns the decomposition as [ndarray](https://docs.rs/ndarray/latest/ndarray/) components.
+This library performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [Matrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm) and returns the decomposition as [ndarray](https://docs.rs/ndarray/latest/ndarray/) components.
 
 # Usage
 
-Input: [CscMatrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/csc/struct.CscMatrix.html)
+Input: [Sparse Matrix (CSR, CSC, or COO)](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/)
 
 Output: decomposition `U`,`S`,`V` where `U`,`V` are [`Array2`](https://docs.rs/ndarray/latest/ndarray/type.Array2.html) and `S` is [`Array1`](https://docs.rs/ndarray/latest/ndarray/type.Array1.html), packaged in a [Result](https://doc.rust-lang.org/stable/core/result/enum.Result.html)\<`SvdRec`, `SvdLibError`\>
 
@@ -29,8 +29,8 @@ Output: decomposition `U`,`S`,`V` where `U`,`V` are [`Array2`](https://docs.rs/n
 ```rust
 use svdlibrs::svd;
 
-// SVD on a Compressed Sparse Column matrix
-let svd = svd(&csc)?;
+// SVD on a Compressed Sparse Row matrix
+let svd = svd(&csr)?;
 ```
 
 ```rust
@@ -43,9 +43,9 @@ let svd = svd_dim(&csc, 3)?;
 ```rust
 use svdlibrs::svd_dim_seed;
 
-// SVD on a Compressed Sparse Column matrix requesting the
+// SVD on a Coordinate-form matrix requesting the
 // dimensions and supplying a fixed seed to the LAS2 algorithm
-let svd = svd_dim_seed(&csc, dimensions, 12345)?;
+let svd = svd_dim_seed(&coo, dimensions, 12345)?;
 ```
 
 ## The SVD and informational Diagnostics are returned in `SvdRec`
@@ -80,7 +80,7 @@ pub struct Diagnostics {
 use svdlibrs::{svd, svd_dim, svd_dim_seed, svdLAS2, SvdRec};
 
 let svd: SvdRec = svdLAS2(
-    &csc,         // sparse column matrix (nalgebra_sparse::csc::CscMatrix)
+    &matrix,      // sparse matrix (nalgebra_sparse::{csr,csc,coo}
     dimensions,   // upper limit of desired number of dimensions
                   // supplying 0 will use the input matrix shape to determine dimensions
     iterations,   // number of algorithm iterations

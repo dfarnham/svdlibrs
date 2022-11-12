@@ -6,11 +6,11 @@
 //!
 //! This is a functional port (mostly a translation) of the algorithm as implemented in Doug Rohde's SVDLIBC
 //!
-//! This library performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [CscMatrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/csc/struct.CscMatrix.html) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm) and returns the decomposition as [ndarray](https://docs.rs/ndarray/latest/ndarray/) components.
+//! This library performs [singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition) on a sparse input [Matrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/) using the [Lanczos algorithm](https://en.wikipedia.org/wiki/Lanczos_algorithm) and returns the decomposition as [ndarray](https://docs.rs/ndarray/latest/ndarray/) components.
 //!
 //! # Usage
 //!
-//! Input: [CscMatrix](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/csc/struct.CscMatrix.html)
+//! Input: [Sparse Matrix (CSR, CSC, or COO)](https://docs.rs/nalgebra-sparse/latest/nalgebra_sparse/)
 //!
 //! Output: decomposition `U`,`S`,`V` where `U`,`V` are [`Array2`](https://docs.rs/ndarray/latest/ndarray/type.Array2.html) and `S` is [`Array1`](https://docs.rs/ndarray/latest/ndarray/type.Array1.html), packaged in a [Result](https://doc.rust-lang.org/stable/core/result/enum.Result.html)\<`SvdRec`, `SvdLibError`\>
 //!
@@ -32,9 +32,9 @@
 //! # coo.push(1, 0, 3.0);
 //! # coo.push(1, 1, -5.0);
 //!
-//! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-//! // SVD on a Compressed Sparse Column matrix
-//! let svd = svd(&csc)?;
+//! # let csr = nalgebra_sparse::csr::CsrMatrix::from(&coo);
+//! // SVD on a Compressed Sparse Row matrix
+//! let svd = svd(&csr)?;
 //! # Ok::<(), svdlibrs::error::SvdLibError>(())
 //! ```
 //!
@@ -63,10 +63,9 @@
 //! # coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
 //! # let dimensions = 3;
 //!
-//! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-//! // SVD on a Compressed Sparse Column matrix requesting the
+//! // SVD on a Coordinate-form matrix requesting the
 //! // dimensions and supplying a fixed seed to the LAS2 algorithm
-//! let svd = svd_dim_seed(&csc, dimensions, 12345)?;
+//! let svd = svd_dim_seed(&coo, dimensions, 12345)?;
 //! # Ok::<(), svdlibrs::error::SvdLibError>(())
 //! ```
 //!
@@ -104,11 +103,10 @@
 //! # extern crate ndarray;
 //! # use ndarray::prelude::*;
 //! use svdlibrs::{svd, svd_dim, svd_dim_seed, svdLAS2, SvdRec};
-//! # let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
-//! # coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
-//! # coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
-//! # coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
-//! # let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
+//! # let mut matrix = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
+//! # matrix.push(0, 0, 1.0); matrix.push(0, 1, 16.0); matrix.push(0, 2, 49.0);
+//! # matrix.push(1, 0, 4.0); matrix.push(1, 1, 25.0); matrix.push(1, 2, 64.0);
+//! # matrix.push(2, 0, 9.0); matrix.push(2, 1, 36.0); matrix.push(2, 2, 81.0);
 //! # let dimensions = 3;
 //! # let iterations = 0;
 //! # let end_interval = &[-1.0e-30, 1.0e-30];
@@ -116,7 +114,7 @@
 //! # let random_seed = 0;
 //!
 //! let svd: SvdRec = svdLAS2(
-//!     &csc,         // sparse column matrix (nalgebra_sparse::csc::CscMatrix)
+//!     &matrix,      // sparse matrix (nalgebra_sparse::{csr,csc,coo}
 //!     dimensions,   // upper limit of desired number of dimensions
 //!                   // supplying 0 will use the input matrix shape to determine dimensions
 //!     iterations,   // number of algorithm iterations
@@ -825,6 +823,7 @@ fn insert_sort<T: PartialOrd>(n: usize, array1: &mut [T], array2: &mut [T]) {
 }
 
 #[allow(non_snake_case)]
+#[rustfmt::skip]
 fn svd_opb(A: &dyn SMat, x: &[f64], y: &mut [f64], temp: &mut [f64], transposed: bool) {
     let nrows = if transposed { A.ncols() } else { A.nrows() };
     let ncols = if transposed { A.nrows() } else { A.ncols() };
@@ -832,7 +831,7 @@ fn svd_opb(A: &dyn SMat, x: &[f64], y: &mut [f64], temp: &mut [f64], transposed:
     assert_eq!(y.len(), ncols, "svd_opb: y must be A.ncols() in length, y = {}, A.ncols = {}", y.len(), ncols);
     assert_eq!(temp.len(), nrows, "svd_opa: temp must be A.nrows() in length, temp = {}, A.nrows = {}", temp.len(), nrows);
     A.svd_opa(x, temp, transposed); // temp = (A * x)
-    A.svd_opa(temp, y, !transposed);  // y = A' * (A * x) = A' * temp
+    A.svd_opa(temp, y, !transposed); // y = A' * (A * x) = A' * temp
 }
 
 // constant times a vector plus a vector
@@ -1175,12 +1174,7 @@ fn startv(
            wptr[6]             diagonal elements of matrix T
 ***********************************************************************/
 #[allow(non_snake_case)]
-fn stpone(
-    A: &dyn SMat,
-    wrk: &mut WorkSpace,
-    store: &mut Store,
-    random_seed: u32,
-) -> Result<(f64, f64), SvdLibError> {
+fn stpone(A: &dyn SMat, wrk: &mut WorkSpace, store: &mut Store, random_seed: u32) -> Result<(f64, f64), SvdLibError> {
     // get initial vector; default is random
     let mut rnm = startv(A, wrk, 0, store, random_seed)?;
     if compare(rnm, 0.0) {
@@ -2035,6 +2029,7 @@ impl SvdRec {
 // SMat implementation for CscMatrix
 //////////////////////////////////////////
 
+#[rustfmt::skip]
 impl SMat for nalgebra_sparse::csc::CscMatrix<f64> {
     fn nrows(&self) -> usize { self.nrows() }
     fn ncols(&self) -> usize { self.ncols() }
@@ -2070,6 +2065,7 @@ impl SMat for nalgebra_sparse::csc::CscMatrix<f64> {
 // SMat implementation for CsrMatrix
 //////////////////////////////////////////
 
+#[rustfmt::skip]
 impl SMat for nalgebra_sparse::csr::CsrMatrix<f64> {
     fn nrows(&self) -> usize { self.nrows() }
     fn ncols(&self) -> usize { self.ncols() }
@@ -2105,6 +2101,7 @@ impl SMat for nalgebra_sparse::csr::CsrMatrix<f64> {
 // SMat implementation for CooMatrix
 //////////////////////////////////////////
 
+#[rustfmt::skip]
 impl SMat for nalgebra_sparse::coo::CooMatrix<f64> {
     fn nrows(&self) -> usize { self.nrows() }
     fn ncols(&self) -> usize { self.ncols() }
@@ -2159,6 +2156,7 @@ mod tests {
         // Note: svd.ut & svd.vt are returned in transposed form
         // M = USV*
         let matrix_approximation = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
+        assert_eq!(svd.recompose(), matrix_approximation);
 
         let epsilon = 1.0e-12;
         assert_eq!(svd.d, 2);
@@ -2192,5 +2190,4 @@ mod tests {
         assert_eq!(svd.d, 1);
         assert!((svd.s[0] - 1.0).abs() < epsilon);
     }
-
 }
