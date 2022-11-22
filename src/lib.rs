@@ -703,6 +703,7 @@ fn eps34() -> f64 {
   BLAS     svd_dcopy
 
 ***********************************************************************/
+#[derive(Debug, Clone, PartialEq)]
 struct Store {
     n: usize,
     vecs: Vec<Vec<f64>>,
@@ -735,6 +736,7 @@ impl Store {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 struct WorkSpace {
     nrows: usize,
     ncols: usize,
@@ -2134,6 +2136,49 @@ impl SMat for nalgebra_sparse::coo::CooMatrix<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nalgebra_sparse::{coo::CooMatrix, csc::CscMatrix, csr::CsrMatrix};
+
+    fn is_normal<T: Clone + Sized + Send + Sync + Unpin>() {}
+    fn is_dynamic_trait<T: ?Sized>() {}
+
+    #[test]
+    fn normal_types() {
+        is_normal::<SvdRec>();
+        is_normal::<Diagnostics>();
+        is_normal::<Store>();
+        is_normal::<WorkSpace>();
+        is_normal::<DMat>();
+        is_normal::<SVDRawRec>();
+    }
+
+    #[test]
+    fn dynamic_types() {
+        is_dynamic_trait::<dyn SMat>();
+    }
+
+    #[test]
+    fn coo_csc_csr() {
+        let coo = CooMatrix::try_from_triplets(4, 4, vec![1, 2], vec![0, 1], vec![3.0, 4.0]).unwrap();
+        let csc = CscMatrix::from(&coo);
+        let csr = CsrMatrix::from(&csc);
+        assert_eq!(svd_dim_seed(&coo, 3, 12345), svd_dim_seed(&csc, 3, 12345));
+        assert_eq!(svd_dim_seed(&csc, 3, 12345), svd_dim_seed(&csr, 3, 12345));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn recomp() {
+        let mut coo = CooMatrix::<f64>::new(3, 3);
+        coo.push(0, 0, 1.0); coo.push(0, 1, 16.0); coo.push(0, 2, 49.0);
+        coo.push(1, 0, 4.0); coo.push(1, 1, 25.0); coo.push(1, 2, 64.0);
+        coo.push(2, 0, 9.0); coo.push(2, 1, 36.0); coo.push(2, 2, 81.0);
+
+        // Note: svd.ut & svd.vt are returned in transposed form
+        // M = USV*
+        let svd = svd(&coo).unwrap();
+        let matrix_approximation = svd.ut.t().dot(&Array2::from_diag(&svd.s)).dot(&svd.vt);
+        assert_eq!(svd.recompose(), matrix_approximation);
+    }
 
     #[test]
     #[rustfmt::skip]
@@ -2142,13 +2187,12 @@ mod tests {
         //   [ 4,  0 ],
         //   [ 3, -5 ]
         // ]
-        let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(2, 2);
+        let mut coo = CooMatrix::<f64>::new(2, 2);
         coo.push(0, 0, 4.0);
         coo.push(1, 0, 3.0);
         coo.push(1, 1, -5.0);
 
-        let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
-        let svd = svd(&csc).unwrap();
+        let svd = svd(&coo).unwrap();
         assert_eq!(svd.d, svd.ut.nrows());
         assert_eq!(svd.d, svd.s.dim());
         assert_eq!(svd.d, svd.vt.nrows());
@@ -2175,12 +2219,12 @@ mod tests {
         // [ [ 1, 0, 0 ],
         //   [ 0, 1, 0 ],
         //   [ 0, 0, 1 ] ]
-        let mut coo = nalgebra_sparse::coo::CooMatrix::<f64>::new(3, 3);
+        let mut coo = CooMatrix::<f64>::new(3, 3);
         coo.push(0, 0, 1.0);
         coo.push(1, 1, 1.0);
         coo.push(2, 2, 1.0);
 
-        let csc = nalgebra_sparse::csc::CscMatrix::from(&coo);
+        let csc = CscMatrix::from(&coo);
         let svd = svd(&csc).unwrap();
         assert_eq!(svd.d, svd.ut.nrows());
         assert_eq!(svd.d, svd.s.dim());
