@@ -1125,7 +1125,7 @@ fn startv(
     }
 
     if rnm2 <= 0.0 {
-        return Err(SvdLibError::StartvError(format!("rnm2 <= 0.0, rnm2 = {}", rnm2)));
+        return Err(SvdLibError::StartvError(format!("rnm2 <= 0.0, rnm2 = {rnm2}")));
     }
 
     if step > 0 {
