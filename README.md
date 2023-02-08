@@ -1,6 +1,6 @@
 # svdlibrs &emsp; [![Latest Version]][crates.io]
 
-[Latest Version]: https://img.shields.io/badge/crates.io-v0.5.0-blue
+[Latest Version]: https://img.shields.io/badge/crates.io-v0.5.1-blue
 [crates.io]: https://crates.io/crates/svdlibrs
 
 A Rust port of LAS2 from SVDLIBC
@@ -137,8 +137,8 @@ $v
 • Cargo.toml dependencies
 ```text
 [dependencies]
-svdlibrs = "0.4.3"
-nalgebra-sparse = "0.7.1"
+svdlibrs = "0.5.1"
+nalgebra-sparse = "0.9.0"
 ndarray = "0.15.6"
 ```
 
